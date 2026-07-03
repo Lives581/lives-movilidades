@@ -184,7 +184,7 @@ function procesarChoferes(json){
       var c = r.c;
       var nombre = c[0] && c[0].v ? String(c[0].v).trim() : '';
       var activo = c[3] && c[3].v ? String(c[3].v).trim().toUpperCase() : 'SI';
-      if (nombre && activo !== 'NO') choferes.push(nombre);
+      if (nombre && nombre.toUpperCase() !== 'CHOFER' && activo !== 'NO') choferes.push(nombre);
     });
   }catch(e){}
   var sel = document.getElementById('selChofer');
@@ -236,6 +236,7 @@ function procesarSolicitudes(json){
         servicio:  String(val(c[20])||'ENVIO').trim().toUpperCase()
       };
       if (!o.id) return;
+      if (o.id.toUpperCase() === 'ID') return; // descartar fila de encabezado
       o.num = (function(){ var m=o.id.match(/MOV-(\d+)/); return m?parseInt(m[1],10):9999; })();
       solicitudes.push(o);
       if (o.estado === 'PROGRAMADO') puntosBloqueados[o.destino.toUpperCase()] = true;
