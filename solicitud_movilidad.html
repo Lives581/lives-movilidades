@@ -85,7 +85,13 @@
     <label>Área solicitante</label>
     <input type="text" id="area" placeholder="Ej.: Avíos, Almacén, Comercial..." autocomplete="off">
 
-    <label>Origen</label>
+    <label>Tipo de servicio</label>
+    <div class="fila-chips" id="chipsServicio">
+      <div class="chip activo" data-valor="ENVIO">📤 Envío</div>
+      <div class="chip" data-valor="RECOJO">📥 Recojo</div>
+    </div>
+
+    <label id="labelBase">Origen — base LIVES</label>
     <div class="fila-chips" id="chipsOrigen">
       <div class="chip" data-valor="BARRANCO">Barranco</div>
       <div class="chip" data-valor="CHORRILLOS">Chorrillos</div>
@@ -107,8 +113,8 @@
       <input type="number" id="cantidad" min="1" step="1" placeholder="Ej.: 3">
     </div>
 
-    <label>Destino</label>
-    <select id="destino"><option value="">Cargando destinos...</option></select>
+    <label id="labelDestino">Destino (a dónde se envía)</label>
+    <select id="destino"><option value="">Cargando puntos...</option></select>
     <div class="info-destino" id="infoDestino">
       <span class="etiqueta" id="etqDistrito"></span>
       <span class="etiqueta zona" id="etqZona"></span>
@@ -164,7 +170,7 @@ var URL_APPS_SCRIPT = 'https://script.google.com/macros/s/AKfycbwY21RREcAXwgrruP
 // =============================================
 
 var directorio = [];   // {nombre, distrito, zona}
-var sel = { origen:'', tipo:'', prioridad:'NO' };
+var sel = { origen:'', tipo:'', prioridad:'NO', servicio:'ENVIO' };
 
 // --- Cargar directorio (gviz) ---
 (function cargarDirectorio(){
@@ -190,7 +196,7 @@ function procesarDirectorio(json){
     }
     directorio.sort(function(a,b){ return a.nombre.localeCompare(b.nombre); });
     var sd = selDestino();
-    sd.innerHTML = '<option value="">— Selecciona destino —</option>';
+    sd.innerHTML = '<option value="">— Selecciona el punto —</option>';
     directorio.forEach(function(d,i){
       var op = document.createElement('option');
       op.value = i; op.textContent = d.nombre;
@@ -233,6 +239,17 @@ activarChips('chipsTipo','tipo', function(v){
   document.getElementById('campoPeso').classList.toggle('visible', v==='CARGA');
   document.getElementById('campoCantidad').classList.toggle('visible', v==='PAQUETE'||v==='SOBRE');
 });
+activarChips('chipsServicio','servicio', function(v){
+  var lblBase = document.getElementById('labelBase');
+  var lblDest = document.getElementById('labelDestino');
+  if (v === 'RECOJO'){
+    lblBase.textContent = 'Llevar a — base LIVES';
+    lblDest.textContent = 'Recoger en (de dónde)';
+  } else {
+    lblBase.textContent = 'Origen — base LIVES';
+    lblDest.textContent = 'Destino (a dónde se envía)';
+  }
+});
 
 // --- Recordar área (predeterminado por equipo) ---
 var inputArea = document.getElementById('area');
@@ -273,7 +290,7 @@ document.getElementById('btnEnviar').addEventListener('click', function(){
   btn.disabled = true; btn.textContent = 'Guardando...';
 
   var params = {
-    accion:'nueva', area:area, origen:sel.origen, tipo:sel.tipo,
+    accion:'nueva', area:area, origen:sel.origen, tipo:sel.tipo, servicio:sel.servicio,
     peso: document.getElementById('peso').value || '',
     cantidad: document.getElementById('cantidad').value || '',
     destino:d.nombre, distrito:d.distrito, zona:d.zona,
@@ -380,7 +397,8 @@ function procesarConsulta(json){
         distrito:String(valC(c[8])||''), zona:String(valC(c[9])||''),
         estado:String(valC(c[14])||'PENDIENTE').toUpperCase(),
         chofer:String(valC(c[12])||''), fechaprog:String(valC(c[13])||''),
-        motivo:String(valC(c[15])||''), num:(function(){var m=String(valC(c[0])).match(/MOV-(\d+)/);return m?parseInt(m[1],10):0;})()
+        motivo:String(valC(c[15])||''), servicio:String(valC(c[20])||'ENVIO').toUpperCase(),
+        num:(function(){var m=String(valC(c[0])).match(/MOV-(\d+)/);return m?parseInt(m[1],10):0;})()
       });
     });
   }catch(e){}
@@ -401,8 +419,9 @@ function procesarConsulta(json){
     var extra='';
     if(o.estado==='PROGRAMADO' && o.chofer) extra='Chofer: '+o.chofer+(o.fechaprog?' · '+o.fechaprog:'');
     if(o.estado==='NO ENTREGADO' && o.motivo) extra='Motivo: '+o.motivo;
+    var serv = o.servicio==='RECOJO' ? '📥 Recojo' : '📤 Envío';
     html += '<div class="item-consulta">'
-      + '<div class="linea1"><span class="id">'+o.id+'</span>'+badge(o.estado)+'</div>'
+      + '<div class="linea1"><span class="id">'+o.id+' · '+serv+'</span>'+badge(o.estado)+'</div>'
       + '<div class="dest">'+o.destino+' <span style="color:#9CA3AF">('+o.distrito+')</span></div>'
       + '<div class="meta">'+o.fecha+(extra?' · '+extra:'')+'</div>'
       + '</div>';
