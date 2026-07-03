@@ -51,6 +51,27 @@
   .btn-otra{margin-top:20px; padding:12px 28px; background:var(--petroleo); color:#fff; border:none; border-radius:10px; font-size:15px; font-weight:600; cursor:pointer;}
   footer{text-align:center; color:var(--gris); font-size:11px; padding:18px;}
   .cargando{font-size:13px; color:var(--gris); font-style:italic;}
+
+  /* Consultor de estado */
+  .tarjeta-consulta{margin-top:18px;}
+  .tarjeta-consulta h3{color:var(--petroleo); font-size:16px; margin-bottom:4px;}
+  .tarjeta-consulta .sub{font-size:12px; color:var(--gris); margin-bottom:12px;}
+  .fila-fechas{display:flex; gap:10px;}
+  .fila-fechas > div{flex:1;}
+  .btn-consultar{width:100%; margin-top:14px; padding:12px; background:var(--petroleo); color:#fff; border:none; border-radius:8px; font-size:15px; font-weight:600; cursor:pointer;}
+  .resultados{margin-top:14px;}
+  .item-consulta{border:1px solid var(--borde); border-radius:8px; padding:11px 12px; margin-bottom:8px;}
+  .item-consulta .linea1{display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;}
+  .item-consulta .id{font-weight:700; color:var(--petroleo); font-size:13px;}
+  .item-consulta .fh{font-size:11px; color:var(--gris);}
+  .item-consulta .dest{font-size:13px; color:#111;}
+  .item-consulta .meta{font-size:11px; color:var(--gris); margin-top:3px;}
+  .est{display:inline-block; padding:2px 9px; border-radius:12px; font-size:11px; font-weight:700;}
+  .est.pend{background:#FEF3C7; color:#92400E;}
+  .est.prog{background:#DBEAFE; color:#1E40AF;}
+  .est.entr{background:#D1FAE5; color:#065F46;}
+  .est.noentr{background:#FEE2E2; color:#991B1B;}
+  .sin-res{text-align:center; color:var(--gris); font-size:13px; padding:16px; font-style:italic;}
 </style>
 </head>
 <body>
@@ -112,6 +133,25 @@
     <div class="id-mov" id="idGenerado"></div>
     <p>Tu solicitud quedó registrada con fecha y hora automáticas.<br>La encargada de movilidades la programará.</p>
     <button class="btn-otra" id="btnOtra">Registrar otra solicitud</button>
+  </div>
+
+  <div class="tarjeta tarjeta-consulta">
+    <h3>Consultar estado de mis solicitudes</h3>
+    <div class="sub">Escribe el nombre de tu área y elige un rango de fechas.</div>
+    <label>Área</label>
+    <input type="text" id="consultaArea" placeholder="Ej.: Avíos, Almacén..." autocomplete="off">
+    <div class="fila-fechas">
+      <div>
+        <label>Desde</label>
+        <input type="date" id="consultaDesde">
+      </div>
+      <div>
+        <label>Hasta</label>
+        <input type="date" id="consultaHasta">
+      </div>
+    </div>
+    <button class="btn-consultar" id="btnConsultar">Ver estado</button>
+    <div class="resultados" id="resultadosConsulta"></div>
   </div>
 </div>
 
@@ -289,6 +329,87 @@ document.getElementById('btnOtra').addEventListener('click', function(){
   document.getElementById('pantallaExito').classList.remove('visible');
   document.getElementById('formulario').style.display='block';
 });
+
+// =============== CONSULTOR DE ESTADO ===============
+// Normaliza texto: mayúsculas, sin tildes, sin espacios extra (tolerante a variantes)
+function normalizar(s){
+  return String(s||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+}
+function valC(c){ return c ? (c.f!=null?c.f:(c.v!=null?c.v:'')) : ''; }
+function parseFecha(str){ // "dd/MM/yyyy HH:mm:ss" -> Date (solo fecha)
+  var m = String(str).match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if(!m) return null;
+  return new Date(parseInt(m[3],10), parseInt(m[2],10)-1, parseInt(m[1],10));
+}
+
+document.getElementById('btnConsultar').addEventListener('click', function(){
+  var area = document.getElementById('consultaArea').value.trim();
+  var cont = document.getElementById('resultadosConsulta');
+  if(!area){ cont.innerHTML='<div class="sin-res">Escribe el nombre de tu área.</div>'; return; }
+  cont.innerHTML='<div class="sin-res">Consultando...</div>';
+  window.__areaBuscada = normalizar(area);
+  var s = document.createElement('script');
+  s.src = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+          '/gviz/tq?sheet=SOLICITUDES&tqx=out:json;responseHandler:procesarConsulta&_=' + Date.now();
+  s.onerror = function(){ cont.innerHTML='<div class="sin-res">Error al consultar. Revisa tu conexión.</div>'; };
+  document.body.appendChild(s);
+});
+
+function procesarConsulta(json){
+  var cont = document.getElementById('resultadosConsulta');
+  var areaB = window.__areaBuscada;
+  var desdeV = document.getElementById('consultaDesde').value;
+  var hastaV = document.getElementById('consultaHasta').value;
+  var desde = desdeV ? new Date(desdeV+'T00:00:00') : null;
+  var hasta = hastaV ? new Date(hastaV+'T23:59:59') : null;
+
+  var filas = [];
+  try{
+    json.table.rows.forEach(function(r){
+      var c = r.c;
+      var areaFila = normalizar(valC(c[2]));
+      if(!areaFila) return;
+      // Coincidencia tolerante: una contiene a la otra
+      if(areaFila.indexOf(areaB) < 0 && areaB.indexOf(areaFila) < 0) return;
+      var fstr = String(valC(c[1])||'');
+      var f = parseFecha(fstr);
+      if(desde && f && f < desde) return;
+      if(hasta && f && f > hasta) return;
+      filas.push({
+        id:String(valC(c[0])||''), fecha:fstr, destino:String(valC(c[7])||''),
+        distrito:String(valC(c[8])||''), zona:String(valC(c[9])||''),
+        estado:String(valC(c[14])||'PENDIENTE').toUpperCase(),
+        chofer:String(valC(c[12])||''), fechaprog:String(valC(c[13])||''),
+        motivo:String(valC(c[15])||''), num:(function(){var m=String(valC(c[0])).match(/MOV-(\d+)/);return m?parseInt(m[1],10):0;})()
+      });
+    });
+  }catch(e){}
+
+  filas.sort(function(a,b){ return b.num - a.num; }); // más recientes primero
+
+  if(!filas.length){ cont.innerHTML='<div class="sin-res">No se encontraron solicitudes para esa área en ese rango.</div>'; return; }
+
+  function badge(e){
+    if(e==='PENDIENTE') return '<span class="est pend">PENDIENTE</span>';
+    if(e==='PROGRAMADO') return '<span class="est prog">PROGRAMADO</span>';
+    if(e==='ENTREGADO') return '<span class="est entr">ENTREGADO</span>';
+    if(e==='NO ENTREGADO') return '<span class="est noentr">NO ENTREGADO</span>';
+    return '<span class="est pend">'+e+'</span>';
+  }
+  var html='';
+  filas.forEach(function(o){
+    var extra='';
+    if(o.estado==='PROGRAMADO' && o.chofer) extra='Chofer: '+o.chofer+(o.fechaprog?' · '+o.fechaprog:'');
+    if(o.estado==='NO ENTREGADO' && o.motivo) extra='Motivo: '+o.motivo;
+    html += '<div class="item-consulta">'
+      + '<div class="linea1"><span class="id">'+o.id+'</span>'+badge(o.estado)+'</div>'
+      + '<div class="dest">'+o.destino+' <span style="color:#9CA3AF">('+o.distrito+')</span></div>'
+      + '<div class="meta">'+o.fecha+(extra?' · '+extra:'')+'</div>'
+      + '</div>';
+  });
+  cont.innerHTML = html;
+}
+window.procesarConsulta = procesarConsulta;
 </script>
 </body>
 </html>
