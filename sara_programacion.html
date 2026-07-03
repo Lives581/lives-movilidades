@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Programación de Movilidades — LIVES</title>
+<style>
+  :root{
+    --petroleo:#0E3B36; --esmeralda:#10B981; --alerta:#DC2626;
+    --monetario:#F59E0B; --fondo:#F1F6F4; --gris:#6B7280; --borde:#D1D5DB;
+    --gris-claro:#F3F4F6;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; font-family:'Segoe UI',Arial,sans-serif;}
+  body{background:var(--fondo); min-height:100vh; padding-bottom:120px;}
+  header{background:var(--petroleo); color:#fff; padding:14px 22px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:50;}
+  header h1{font-size:17px; font-weight:600;}
+  header .marca{font-size:20px; font-weight:300; letter-spacing:6px;}
+
+  .barra{background:#fff; border-bottom:1px solid var(--borde); padding:12px 22px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; position:sticky; top:52px; z-index:40;}
+  .grupo-filtro{display:flex; gap:6px; align-items:center;}
+  .grupo-filtro label{font-size:12px; font-weight:600; color:var(--gris);}
+  .barra select, .barra input[type=date], .barra input[type=text]{
+    padding:8px 10px; border:1px solid var(--borde); border-radius:7px; font-size:13px; background:#fff;
+  }
+  .btn-zona{padding:7px 13px; border:1.5px solid var(--borde); border-radius:20px; background:#fff; font-size:12px; font-weight:600; color:var(--gris); cursor:pointer;}
+  .btn-zona.activo{background:var(--petroleo); color:#fff; border-color:var(--petroleo);}
+  .toggle-urg{padding:7px 13px; border:1.5px solid var(--alerta); border-radius:20px; background:#fff; font-size:12px; font-weight:600; color:var(--alerta); cursor:pointer;}
+  .toggle-urg.activo{background:var(--alerta); color:#fff;}
+  .btn-refresh{margin-left:auto; padding:8px 14px; background:var(--esmeralda); color:#fff; border:none; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer;}
+
+  .resumen{padding:10px 22px; font-size:13px; color:var(--gris);}
+  .resumen b{color:var(--petroleo);}
+
+  .tabla-cont{padding:0 22px 22px; overflow-x:auto;}
+  table{width:100%; border-collapse:collapse; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 1px 4px rgba(14,59,54,.06); font-size:13px;}
+  thead th{background:var(--petroleo); color:#fff; padding:10px 8px; text-align:left; font-weight:600; white-space:nowrap; font-size:12px;}
+  tbody td{padding:9px 8px; border-bottom:1px solid var(--gris-claro); vertical-align:middle;}
+  tbody tr:hover{background:#F9FEFB;}
+  tr.sel{background:#ECFDF5 !important;}
+  tr.bloqueado{opacity:.55;}
+  tr.programado{background:#FafafA;}
+
+  .chk{width:17px; height:17px; cursor:pointer; accent-color:var(--esmeralda);}
+  .chk:disabled{cursor:not-allowed;}
+  .badge{display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:700; white-space:nowrap;}
+  .b-zona{background:var(--petroleo); color:#fff;}
+  .b-urg{background:var(--alerta); color:#fff;}
+  .b-pend{background:#FEF3C7; color:#92400E;}
+  .b-prog{background:#DBEAFE; color:#1E40AF;}
+  .b-entr{background:#D1FAE5; color:#065F46;}
+  .b-noentr{background:#FEE2E2; color:#991B1B;}
+  .b-lock{background:#E5E7EB; color:#374151;}
+  .id-col{font-weight:700; color:var(--petroleo); white-space:nowrap;}
+  .fh{font-size:12px; color:var(--gris); white-space:nowrap;}
+  .destino-col{font-weight:600;}
+  .cargando, .vacio{padding:40px; text-align:center; color:var(--gris); font-style:italic;}
+
+  .accion-bar{position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:2px solid var(--esmeralda);
+    padding:14px 22px; display:none; align-items:center; gap:12px; flex-wrap:wrap; box-shadow:0 -4px 12px rgba(0,0,0,.08); z-index:60;}
+  .accion-bar.visible{display:flex;}
+  .accion-bar .info{font-size:14px; color:var(--petroleo); font-weight:600;}
+  .accion-bar .info .zona-sel{color:var(--esmeralda);}
+  .accion-bar .warn-zona{color:var(--monetario); font-size:12px; font-weight:600;}
+  .accion-bar select, .accion-bar input[type=date]{padding:9px 11px; border:1px solid var(--borde); border-radius:7px; font-size:14px;}
+  .btn-programar{padding:11px 22px; background:var(--esmeralda); color:#fff; border:none; border-radius:8px; font-size:15px; font-weight:700; cursor:pointer; margin-left:auto;}
+  .btn-programar:disabled{background:var(--gris); cursor:not-allowed;}
+  .btn-limpiar{padding:11px 16px; background:#fff; color:var(--gris); border:1px solid var(--borde); border-radius:8px; font-size:14px; cursor:pointer;}
+
+  .toast{position:fixed; top:70px; right:22px; padding:14px 18px; border-radius:10px; font-size:14px; font-weight:600; z-index:100; display:none; box-shadow:0 4px 14px rgba(0,0,0,.15);}
+  .toast.exito{display:block; background:#ECFDF5; color:#065F46; border:1px solid var(--esmeralda);}
+  .toast.error{display:block; background:#FEF2F2; color:var(--alerta); border:1px solid var(--alerta);}
+  footer{text-align:center; color:var(--gris); font-size:11px; padding:14px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Programación de Movilidades</h1>
+  <div class="marca">LIVES</div>
+</header>
+
+<div class="barra">
+  <div class="grupo-filtro">
+    <label>Zona:</label>
+    <span class="btn-zona activo" data-zona="">Todas</span>
+    <span class="btn-zona" data-zona="NORTE">Norte</span>
+    <span class="btn-zona" data-zona="SUR">Sur</span>
+    <span class="btn-zona" data-zona="ESTE">Este</span>
+    <span class="btn-zona" data-zona="OESTE">Oeste</span>
+  </div>
+  <span class="toggle-urg" id="toggleUrg">Solo urgentes</span>
+  <div class="grupo-filtro">
+    <label>Estado:</label>
+    <select id="filtroEstado">
+      <option value="PENDIENTE">Pendientes</option>
+      <option value="PROGRAMADO">Programados</option>
+      <option value="TODOS">Todos</option>
+    </select>
+  </div>
+  <div class="grupo-filtro">
+    <label>Buscar:</label>
+    <input type="text" id="buscar" placeholder="Destino, área, ID...">
+  </div>
+  <button class="btn-refresh" id="btnRefresh">Actualizar</button>
+</div>
+
+<div class="resumen" id="resumen"></div>
+
+<div class="tabla-cont">
+  <table>
+    <thead>
+      <tr>
+        <th><input type="checkbox" class="chk" id="chkTodos" title="Seleccionar visibles"></th>
+        <th>ID</th>
+        <th>Fecha / Hora solicitud</th>
+        <th>Prioridad</th>
+        <th>Área</th>
+        <th>Origen</th>
+        <th>Tipo</th>
+        <th>Cant / Peso</th>
+        <th>Destino</th>
+        <th>Distrito</th>
+        <th>Zona</th>
+        <th>Estado</th>
+        <th>Chofer</th>
+        <th>Comentarios</th>
+      </tr>
+    </thead>
+    <tbody id="cuerpo">
+      <tr><td colspan="14" class="cargando">Cargando solicitudes...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="accion-bar" id="accionBar">
+  <span class="info"><span id="numSel">0</span> seleccionada(s) · Zona: <span class="zona-sel" id="zonaSel">—</span></span>
+  <span class="warn-zona" id="warnZona"></span>
+  <div class="grupo-filtro">
+    <label style="font-size:13px;font-weight:600;color:var(--gris)">Chofer:</label>
+    <select id="selChofer"><option value="">— Elegir chofer —</option></select>
+  </div>
+  <div class="grupo-filtro">
+    <label style="font-size:13px;font-weight:600;color:var(--gris)">Fecha:</label>
+    <input type="date" id="fechaProg">
+  </div>
+  <button class="btn-limpiar" id="btnLimpiar">Cancelar</button>
+  <button class="btn-programar" id="btnProgramar">Programar ruta</button>
+</div>
+
+<div class="toast" id="toast"></div>
+<footer>LIVES · Sistema de Movilidades · Uso interno</footer>
+
+<script>
+// =============== CONFIGURACIÓN ===============
+var SHEET_ID = '1p8zQ1h7yfufwolkuvfeOWUGMNyCh7r4v35nvXOv0rwg';
+var URL_APPS_SCRIPT = 'https://script.google.com/macros/s/AKfycbwY21RREcAXwgrruPzEgAkd_CcEj2PRJSb3ERRFCzOPSAzb2RS2h8zJ1CHDoM0i7UTN/exec';
+// =============================================
+
+var solicitudes = [];       // todas las filas
+var choferes = [];          // activos
+var puntosBloqueados = {};  // DESTINO(mayus) -> true si tiene PROGRAMADO sin cerrar
+var seleccion = {};         // id -> true
+var filtro = { zona:'', urg:false, estado:'PENDIENTE', buscar:'' };
+
+// ---------- Cargar CHOFERES ----------
+function cargarChoferes(){
+  var s = document.createElement('script');
+  s.src = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+          '/gviz/tq?sheet=CHOFERES&tqx=out:json;responseHandler:procesarChoferes&_=' + Date.now();
+  document.body.appendChild(s);
+}
+function procesarChoferes(json){
+  choferes = [];
+  try{
+    json.table.rows.forEach(function(r){
+      var c = r.c;
+      var nombre = c[0] && c[0].v ? String(c[0].v).trim() : '';
+      var activo = c[3] && c[3].v ? String(c[3].v).trim().toUpperCase() : 'SI';
+      if (nombre && activo !== 'NO') choferes.push(nombre);
+    });
+  }catch(e){}
+  var sel = document.getElementById('selChofer');
+  sel.innerHTML = '<option value="">— Elegir chofer —</option>';
+  choferes.forEach(function(ch){
+    var op = document.createElement('option'); op.value=ch; op.textContent=ch; sel.appendChild(op);
+  });
+}
+window.procesarChoferes = procesarChoferes;
+
+// ---------- Cargar SOLICITUDES ----------
+function cargarSolicitudes(){
+  document.getElementById('cuerpo').innerHTML = '<tr><td colspan="14" class="cargando">Cargando solicitudes...</td></tr>';
+  var s = document.createElement('script');
+  s.src = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+          '/gviz/tq?sheet=SOLICITUDES&tqx=out:json;responseHandler:procesarSolicitudes&_=' + Date.now();
+  s.onerror = function(){ document.getElementById('cuerpo').innerHTML='<tr><td colspan="14" class="vacio">Error al cargar. Revisa tu conexión.</td></tr>'; };
+  document.body.appendChild(s);
+}
+function val(c){ return c && (c.f !== undefined && c.f !== null ? c.f : c.v) != null ? (c.f !== undefined && c.f !== null ? c.f : c.v) : ''; }
+
+function procesarSolicitudes(json){
+  solicitudes = [];
+  puntosBloqueados = {};
+  try{
+    json.table.rows.forEach(function(r){
+      var c = r.c;
+      var o = {
+        id:        String(val(c[0])||'').trim(),
+        fecha:     String(val(c[1])||'').trim(),
+        area:      String(val(c[2])||'').trim(),
+        origen:    String(val(c[3])||'').trim(),
+        tipo:      String(val(c[4])||'').trim(),
+        cantidad:  String(val(c[5])||'').trim(),
+        peso:      String(val(c[6])||'').trim(),
+        destino:   String(val(c[7])||'').trim(),
+        distrito:  String(val(c[8])||'').trim(),
+        zona:      String(val(c[9])||'').trim().toUpperCase(),
+        prioridad: String(val(c[10])||'').trim().toUpperCase(),
+        comentarios:String(val(c[11])||'').trim(),
+        chofer:    String(val(c[12])||'').trim(),
+        fechaprog: String(val(c[13])||'').trim(),
+        estado:    String(val(c[14])||'PENDIENTE').trim().toUpperCase()
+      };
+      if (!o.id) return;
+      o.num = (function(){ var m=o.id.match(/MOV-(\d+)/); return m?parseInt(m[1],10):9999; })();
+      solicitudes.push(o);
+      if (o.estado === 'PROGRAMADO') puntosBloqueados[o.destino.toUpperCase()] = true;
+    });
+  }catch(e){}
+  render();
+}
+window.procesarSolicitudes = procesarSolicitudes;
+
+// ---------- Orden inteligente ----------
+// Zona (agrupa ruta) -> urgente primero -> más antiguo primero (por num de ID)
+function ordenar(lista){
+  return lista.slice().sort(function(a,b){
+    if (a.zona !== b.zona) return a.zona < b.zona ? -1 : 1;
+    var ua = a.prioridad==='SI'?0:1, ub = b.prioridad==='SI'?0:1;
+    if (ua !== ub) return ua-ub;
+    return a.num - b.num;
+  });
+}
+
+function pasaFiltros(o){
+  if (filtro.estado !== 'TODOS' && o.estado !== filtro.estado) return false;
+  if (filtro.zona && o.zona !== filtro.zona) return false;
+  if (filtro.urg && o.prioridad !== 'SI') return false;
+  if (filtro.buscar){
+    var t = (o.id+' '+o.destino+' '+o.area+' '+o.distrito).toLowerCase();
+    if (t.indexOf(filtro.buscar.toLowerCase()) < 0) return false;
+  }
+  return true;
+}
+
+function badgeEstado(e){
+  if (e==='PENDIENTE') return '<span class="badge b-pend">PENDIENTE</span>';
+  if (e==='PROGRAMADO') return '<span class="badge b-prog">PROGRAMADO</span>';
+  if (e==='ENTREGADO') return '<span class="badge b-entr">ENTREGADO</span>';
+  if (e==='NO ENTREGADO') return '<span class="badge b-noentr">NO ENTREGADO</span>';
+  return '<span class="badge b-pend">'+e+'</span>';
+}
+
+function render(){
+  var lista = ordenar(solicitudes.filter(pasaFiltros));
+  var cuerpo = document.getElementById('cuerpo');
+  if (!lista.length){
+    cuerpo.innerHTML = '<tr><td colspan="14" class="vacio">No hay solicitudes con estos filtros.</td></tr>';
+    actualizarResumen(); actualizarBarra(); return;
+  }
+  var html = '';
+  lista.forEach(function(o){
+    var esPend = o.estado === 'PENDIENTE';
+    var bloqueado = esPend && puntosBloqueados[o.destino.toUpperCase()];
+    var checkable = esPend && !bloqueado;
+    var clases = [];
+    if (seleccion[o.id]) clases.push('sel');
+    if (bloqueado) clases.push('bloqueado');
+    if (o.estado==='PROGRAMADO') clases.push('programado');
+    var cantPeso = o.tipo==='CARGA' ? (o.peso? o.peso+' kg':'—') : (o.cantidad? o.cantidad+' und':'—');
+    html += '<tr class="'+clases.join(' ')+'" data-id="'+o.id+'" data-zona="'+o.zona+'">'
+      + '<td>'+(checkable
+          ? '<input type="checkbox" class="chk chk-fila" data-id="'+o.id+'" '+(seleccion[o.id]?'checked':'')+'>'
+          : (bloqueado?'<span class="badge b-lock" title="Punto con despacho en curso">🔒</span>':''))+'</td>'
+      + '<td class="id-col">'+o.id+'</td>'
+      + '<td class="fh">'+o.fecha+'</td>'
+      + '<td>'+(o.prioridad==='SI'?'<span class="badge b-urg">URGENTE</span>':'<span style="color:#9CA3AF">Normal</span>')+'</td>'
+      + '<td>'+o.area+'</td>'
+      + '<td>'+o.origen+'</td>'
+      + '<td>'+o.tipo+'</td>'
+      + '<td>'+cantPeso+'</td>'
+      + '<td class="destino-col">'+o.destino+(bloqueado?' <span class="badge b-lock">en curso</span>':'')+'</td>'
+      + '<td>'+o.distrito+'</td>'
+      + '<td><span class="badge b-zona">'+o.zona+'</span></td>'
+      + '<td>'+badgeEstado(o.estado)+'</td>'
+      + '<td>'+(o.chofer||'—')+'</td>'
+      + '<td style="max-width:180px;font-size:12px;color:#6B7280">'+o.comentarios+'</td>'
+      + '</tr>';
+  });
+  cuerpo.innerHTML = html;
+  document.querySelectorAll('.chk-fila').forEach(function(ch){
+    ch.addEventListener('change', function(){
+      var id = this.getAttribute('data-id');
+      if (this.checked) seleccion[id]=true; else delete seleccion[id];
+      this.closest('tr').classList.toggle('sel', this.checked);
+      actualizarBarra();
+    });
+  });
+  actualizarResumen(); actualizarBarra();
+}
+
+function actualizarResumen(){
+  var pend = solicitudes.filter(function(o){return o.estado==='PENDIENTE';}).length;
+  var urg = solicitudes.filter(function(o){return o.estado==='PENDIENTE'&&o.prioridad==='SI';}).length;
+  var prog = solicitudes.filter(function(o){return o.estado==='PROGRAMADO';}).length;
+  document.getElementById('resumen').innerHTML =
+    '<b>'+pend+'</b> pendientes · <b style="color:var(--alerta)">'+urg+'</b> urgentes sin programar · <b>'+prog+'</b> programadas en curso';
+}
+
+function actualizarBarra(){
+  var ids = Object.keys(seleccion);
+  var bar = document.getElementById('accionBar');
+  if (!ids.length){ bar.classList.remove('visible'); return; }
+  bar.classList.add('visible');
+  document.getElementById('numSel').textContent = ids.length;
+  var zonas = {};
+  ids.forEach(function(id){
+    var o = solicitudes.find(function(x){return x.id===id;});
+    if (o) zonas[o.zona]=true;
+  });
+  var zl = Object.keys(zonas);
+  document.getElementById('zonaSel').textContent = zl.join(', ');
+  document.getElementById('warnZona').textContent = zl.length>1 ? '⚠ Estás mezclando zonas en una misma ruta' : '';
+}
+
+// ---------- Programar ----------
+document.getElementById('btnProgramar').addEventListener('click', function(){
+  var ids = Object.keys(seleccion);
+  if (!ids.length) return;
+  var chofer = document.getElementById('selChofer').value;
+  var fechaprog = document.getElementById('fechaProg').value;
+  if (!chofer){ mostrarToast('Elige un chofer','error'); return; }
+  if (!fechaprog){ mostrarToast('Elige la fecha programada','error'); return; }
+
+  var btn = this; btn.disabled=true; btn.textContent='Programando...';
+  var params = {
+    accion:'programarlote', ids:ids.join(','), chofer:chofer, fechaprog:fechaprog,
+    callback:'respProgramar'
+  };
+  var qs = Object.keys(params).map(function(k){return encodeURIComponent(k)+'='+encodeURIComponent(params[k]);}).join('&');
+  var s = document.createElement('script');
+  s.src = URL_APPS_SCRIPT + '?' + qs;
+  s.onerror = function(){ btn.disabled=false; btn.textContent='Programar ruta'; mostrarToast('Error de conexión','error'); };
+  document.body.appendChild(s);
+});
+
+window.respProgramar = function(r){
+  var btn = document.getElementById('btnProgramar');
+  btn.disabled=false; btn.textContent='Programar ruta';
+  if (r && r.ok){
+    mostrarToast(r.msg || 'Ruta programada','exito');
+    seleccion = {};
+    document.getElementById('selChofer').value='';
+    setTimeout(cargarSolicitudes, 600);
+  } else {
+    mostrarToast((r&&r.msg)?r.msg:'Error al programar','error');
+  }
+};
+
+function mostrarToast(msg, tipo){
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast '+tipo;
+  setTimeout(function(){ t.className='toast'; }, 4500);
+}
+
+// ---------- Filtros ----------
+document.querySelectorAll('.btn-zona').forEach(function(b){
+  b.addEventListener('click', function(){
+    document.querySelectorAll('.btn-zona').forEach(function(x){x.classList.remove('activo');});
+    this.classList.add('activo');
+    filtro.zona = this.getAttribute('data-zona'); render();
+  });
+});
+document.getElementById('toggleUrg').addEventListener('click', function(){
+  filtro.urg = !filtro.urg; this.classList.toggle('activo', filtro.urg); render();
+});
+document.getElementById('filtroEstado').addEventListener('change', function(){ filtro.estado=this.value; render(); });
+document.getElementById('buscar').addEventListener('input', function(){ filtro.buscar=this.value; render(); });
+document.getElementById('btnRefresh').addEventListener('click', cargarSolicitudes);
+document.getElementById('btnLimpiar').addEventListener('click', function(){
+  seleccion={}; render();
+});
+document.getElementById('chkTodos').addEventListener('change', function(){
+  var marcar = this.checked;
+  document.querySelectorAll('.chk-fila').forEach(function(ch){
+    var id = ch.getAttribute('data-id');
+    ch.checked = marcar;
+    if (marcar) seleccion[id]=true; else delete seleccion[id];
+    ch.closest('tr').classList.toggle('sel', marcar);
+  });
+  actualizarBarra();
+});
+
+// Fecha programada por defecto = hoy
+(function(){
+  var hoy = new Date();
+  var iso = hoy.getFullYear()+'-'+('0'+(hoy.getMonth()+1)).slice(-2)+'-'+('0'+hoy.getDate()).slice(-2);
+  document.getElementById('fechaProg').value = iso;
+})();
+
+// Init
+cargarChoferes();
+cargarSolicitudes();
+</script>
+</body>
+</html>
