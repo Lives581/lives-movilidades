@@ -116,7 +116,7 @@ function procesarChoferes(json){
       var c = r.c;
       var nombre = String(valC(c[0])||'').trim();
       var activo = String(valC(c[3])||'SI').trim().toUpperCase();
-      if(nombre && activo!=='NO'){
+      if(nombre && nombre.toUpperCase()!=='CHOFER' && activo!=='NO'){
         var op=document.createElement('option'); op.value=nombre; op.textContent=nombre; sel.appendChild(op);
       }
     });
@@ -156,6 +156,8 @@ function procesarRuta(json){
   try{
     json.table.rows.forEach(function(r){
       var c = r.c;
+      var idFila = String(valC(c[0])||'').trim();
+      if(idFila.toUpperCase()==='ID') return; // descartar fila de encabezado
       var chofer = normalizar(valC(c[12]));
       var estado = String(valC(c[14])||'').toUpperCase();
       if(chofer !== chN) return;
