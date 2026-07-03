@@ -192,7 +192,10 @@ function procesarDirectorio(json){
       var nombre  = c[2] && c[2].v ? String(c[2].v).trim() : '';
       var zona    = c[3] && c[3].v ? String(c[3].v).trim() : '';
       var distrito= c[4] && c[4].v ? String(c[4].v).trim() : '';
-      if (nombre) directorio.push({nombre:nombre, distrito:distrito, zona:zona});
+      var nu = nombre.toUpperCase();
+      if (nombre && nu!=='PROVEEDOR' && nu!=='RAZON SOCIAL' && zona.toUpperCase()!=='ZONA') {
+        directorio.push({nombre:nombre, distrito:distrito, zona:zona});
+      }
     }
     directorio.sort(function(a,b){ return a.nombre.localeCompare(b.nombre); });
     var sd = selDestino();
@@ -384,6 +387,8 @@ function procesarConsulta(json){
   try{
     json.table.rows.forEach(function(r){
       var c = r.c;
+      var idFila = String(valC(c[0])||'').trim();
+      if(idFila.toUpperCase()==='ID') return; // descartar encabezado
       var areaFila = normalizar(valC(c[2]));
       if(!areaFila) return;
       // Coincidencia tolerante: una contiene a la otra
