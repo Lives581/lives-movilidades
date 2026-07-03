@@ -50,6 +50,11 @@
   .b-entr{background:#D1FAE5; color:#065F46;}
   .b-noentr{background:#FEE2E2; color:#991B1B;}
   .b-lock{background:#E5E7EB; color:#374151;}
+  .b-envio{background:#0E3B36; color:#fff;}
+  .b-recojo{background:#F59E0B; color:#fff;}
+  .btn-ubic{display:inline-block; padding:3px 9px; background:#EFF6FF; color:#1E40AF; border:1px solid #BFDBFE; border-radius:6px; font-size:12px; font-weight:600; text-decoration:none;}
+  .btn-ubic:hover{background:#DBEAFE;}
+  .btn-foto-link{display:inline-block; padding:3px 7px; background:#ECFDF5; border:1px solid #A7F3D0; border-radius:6px; text-decoration:none; font-size:13px;}
   .id-col{font-weight:700; color:var(--petroleo); white-space:nowrap;}
   .fh{font-size:12px; color:var(--gris); white-space:nowrap;}
   .destino-col{font-weight:600;}
@@ -112,21 +117,25 @@
         <th><input type="checkbox" class="chk" id="chkTodos" title="Seleccionar visibles"></th>
         <th>ID</th>
         <th>Fecha / Hora solicitud</th>
+        <th>Servicio</th>
         <th>Prioridad</th>
         <th>Área</th>
-        <th>Origen</th>
+        <th>Base LIVES</th>
         <th>Tipo</th>
         <th>Cant / Peso</th>
-        <th>Destino</th>
+        <th>Punto (destino/recojo)</th>
         <th>Distrito</th>
         <th>Zona</th>
         <th>Estado</th>
         <th>Chofer</th>
+        <th>H. Programación</th>
+        <th>H. Entrega</th>
+        <th>Ubicación / Foto</th>
         <th>Comentarios</th>
       </tr>
     </thead>
     <tbody id="cuerpo">
-      <tr><td colspan="14" class="cargando">Cargando solicitudes...</td></tr>
+      <tr><td colspan="17" class="cargando">Cargando solicitudes...</td></tr>
     </tbody>
   </table>
 </div>
@@ -218,7 +227,13 @@ function procesarSolicitudes(json){
         comentarios:String(val(c[11])||'').trim(),
         chofer:    String(val(c[12])||'').trim(),
         fechaprog: String(val(c[13])||'').trim(),
-        estado:    String(val(c[14])||'PENDIENTE').trim().toUpperCase()
+        estado:    String(val(c[14])||'PENDIENTE').trim().toUpperCase(),
+        motivo:    String(val(c[15])||'').trim(),
+        hentrega:  String(val(c[16])||'').trim(),
+        hprog:     String(val(c[17])||'').trim(),
+        ubicacion: String(val(c[18])||'').trim(),
+        foto:      String(val(c[19])||'').trim(),
+        servicio:  String(val(c[20])||'ENVIO').trim().toUpperCase()
       };
       if (!o.id) return;
       o.num = (function(){ var m=o.id.match(/MOV-(\d+)/); return m?parseInt(m[1],10):9999; })();
@@ -264,7 +279,7 @@ function render(){
   var lista = ordenar(solicitudes.filter(pasaFiltros));
   var cuerpo = document.getElementById('cuerpo');
   if (!lista.length){
-    cuerpo.innerHTML = '<tr><td colspan="14" class="vacio">No hay solicitudes con estos filtros.</td></tr>';
+    cuerpo.innerHTML = '<tr><td colspan="17" class="vacio">No hay solicitudes con estos filtros.</td></tr>';
     actualizarResumen(); actualizarBarra(); return;
   }
   var html = '';
@@ -277,22 +292,36 @@ function render(){
     if (bloqueado) clases.push('bloqueado');
     if (o.estado==='PROGRAMADO') clases.push('programado');
     var cantPeso = o.tipo==='CARGA' ? (o.peso? o.peso+' kg':'—') : (o.cantidad? o.cantidad+' und':'—');
+    var badgeServ = o.servicio==='RECOJO'
+        ? '<span class="badge b-recojo">RECOJO</span>'
+        : '<span class="badge b-envio">ENVÍO</span>';
+    var flechaBase = o.servicio==='RECOJO'
+        ? '<span style="font-size:11px;color:#9CA3AF">→ '+o.origen+'</span>'
+        : '<span style="font-size:11px;color:#9CA3AF">'+o.origen+' →</span>';
+    var ubicHtml = '';
+    if (o.ubicacion) ubicHtml += '<a href="'+o.ubicacion+'" target="_blank" class="btn-ubic" title="Ver ubicación en el mapa">📍 Mapa</a> ';
+    if (o.foto) ubicHtml += '<a href="'+o.foto+'" target="_blank" class="btn-foto-link" title="Ver foto">📷</a>';
+    if (!ubicHtml) ubicHtml = '<span style="color:#D1D5DB">—</span>';
     html += '<tr class="'+clases.join(' ')+'" data-id="'+o.id+'" data-zona="'+o.zona+'">'
       + '<td>'+(checkable
           ? '<input type="checkbox" class="chk chk-fila" data-id="'+o.id+'" '+(seleccion[o.id]?'checked':'')+'>'
           : (bloqueado?'<span class="badge b-lock" title="Punto con despacho en curso">🔒</span>':''))+'</td>'
       + '<td class="id-col">'+o.id+'</td>'
       + '<td class="fh">'+o.fecha+'</td>'
+      + '<td>'+badgeServ+'</td>'
       + '<td>'+(o.prioridad==='SI'?'<span class="badge b-urg">URGENTE</span>':'<span style="color:#9CA3AF">Normal</span>')+'</td>'
       + '<td>'+o.area+'</td>'
-      + '<td>'+o.origen+'</td>'
+      + '<td>'+o.origen+' '+flechaBase+'</td>'
       + '<td>'+o.tipo+'</td>'
       + '<td>'+cantPeso+'</td>'
       + '<td class="destino-col">'+o.destino+(bloqueado?' <span class="badge b-lock">en curso</span>':'')+'</td>'
       + '<td>'+o.distrito+'</td>'
       + '<td><span class="badge b-zona">'+o.zona+'</span></td>'
-      + '<td>'+badgeEstado(o.estado)+'</td>'
+      + '<td>'+badgeEstado(o.estado)+(o.motivo?'<br><span style="font-size:11px;color:#991B1B">'+o.motivo+'</span>':'')+'</td>'
       + '<td>'+(o.chofer||'—')+'</td>'
+      + '<td class="fh">'+(o.hprog||'—')+'</td>'
+      + '<td class="fh">'+(o.hentrega||'—')+'</td>'
+      + '<td style="white-space:nowrap">'+ubicHtml+'</td>'
       + '<td style="max-width:180px;font-size:12px;color:#6B7280">'+o.comentarios+'</td>'
       + '</tr>';
   });
