@@ -30,6 +30,12 @@
   .card .id{font-weight:800; color:var(--petroleo); font-size:15px;}
   .card .badge-urg{background:var(--alerta); color:#fff; font-size:11px; font-weight:700; padding:3px 9px; border-radius:12px;}
   .card .badge-zona{background:var(--petroleo); color:#fff; font-size:11px; font-weight:700; padding:3px 9px; border-radius:12px;}
+  .card .badge-serv{font-size:11px; font-weight:800; padding:3px 9px; border-radius:12px;}
+  .card .badge-serv.envio{background:var(--petroleo); color:#fff;}
+  .card .badge-serv.recojo{background:var(--monetario); color:#fff;}
+  .card .accion-linea{font-size:12px; font-weight:800; letter-spacing:.5px; margin-bottom:2px;}
+  .card .accion-linea.envio{color:var(--esmeralda);}
+  .card .accion-linea.recojo{color:var(--monetario);}
   .card .destino{font-size:18px; font-weight:700; color:#111; margin-bottom:2px;}
   .card .distrito{font-size:13px; color:var(--gris); margin-bottom:10px;}
   .card .datos{font-size:13px; color:#374151; line-height:1.7; margin-bottom:12px;}
@@ -160,6 +166,7 @@ function procesarRuta(json){
         destino:String(valC(c[7])||''), distrito:String(valC(c[8])||''),
         zona:String(valC(c[9])||'').toUpperCase(), prioridad:String(valC(c[10])||'').toUpperCase(),
         comentarios:String(valC(c[11])||''), fechaprog:String(valC(c[13])||''), area:String(valC(c[2])||''),
+        origen:String(valC(c[3])||''), servicio:String(valC(c[20])||'ENVIO').toUpperCase(),
         num:(function(){var m=String(valC(c[0])).match(/MOV-(\d+)/);return m?parseInt(m[1],10):0;})()
       });
     });
@@ -181,23 +188,28 @@ function render(){
   var html='';
   solicitudes.forEach(function(o){
     var cantPeso = o.tipo.toUpperCase()==='CARGA' ? (o.peso? o.peso+' kg':'—') : (o.cantidad? o.cantidad+' und':'—');
+    var esRecojo = o.servicio==='RECOJO';
+    var badgeServ = esRecojo ? '<span class="badge-serv recojo">RECOJO</span>' : '<span class="badge-serv envio">ENVÍO</span>';
+    var lineaAccion = esRecojo
+        ? '<div class="accion-linea recojo">📥 RECOGER EN:</div><div class="destino">'+o.destino+'</div><div class="distrito">'+o.distrito+' · luego llevar a <b>'+o.origen+'</b></div>'
+        : '<div class="accion-linea envio">📤 ENTREGAR EN:</div><div class="destino">'+o.destino+'</div><div class="distrito">'+o.distrito+'</div>';
+    var txtBtnOk = esRecojo ? '✓ Recogido' : '✓ Entregado';
     html += '<div class="card '+(o.prioridad==='SI'?'urgente':'')+'" id="card-'+o.id+'">'
       + '<div class="top"><span class="id">'+o.id+'</span>'
-      +   '<span>'+(o.prioridad==='SI'?'<span class="badge-urg">URGENTE</span> ':'')+'<span class="badge-zona">'+o.zona+'</span></span></div>'
-      + '<div class="destino">'+o.destino+'</div>'
-      + '<div class="distrito">'+o.distrito+'</div>'
+      +   '<span>'+badgeServ+' '+(o.prioridad==='SI'?'<span class="badge-urg">URGENTE</span> ':'')+'<span class="badge-zona">'+o.zona+'</span></span></div>'
+      + lineaAccion
       + '<div class="datos"><b>Tipo:</b> '+o.tipo+' · <b>'+cantPeso+'</b><br><b>Área:</b> '+o.area+'</div>'
       + (o.comentarios? '<div class="coment">📝 '+o.comentarios+'</div>':'')
       + '<div class="acciones">'
-      +   '<button class="btn-entregado" onclick="marcarEntregado(\''+o.id+'\')">✓ Entregado</button>'
-      +   '<button class="btn-noentregado" onclick="mostrarMotivo(\''+o.id+'\')">No entregado</button>'
+      +   '<button class="btn-entregado" onclick="marcarEntregado(\''+o.id+'\')">'+txtBtnOk+'</button>'
+      +   '<button class="btn-noentregado" onclick="mostrarMotivo(\''+o.id+'\')">No se pudo</button>'
       + '</div>'
       + '<label class="btn-foto" id="lblfoto-'+o.id+'" for="foto-'+o.id+'">📷 Tomar foto (opcional)</label>'
       + '<input type="file" accept="image/*" capture="environment" class="foto-input" id="foto-'+o.id+'" onchange="capturarFoto(\''+o.id+'\', this)">'
       + '<div class="preview" id="prev-'+o.id+'"></div>'
       + '<div class="motivo-box" id="motivo-'+o.id+'">'
-      +   '<textarea id="txtmotivo-'+o.id+'" placeholder="¿Por qué no se pudo entregar? (obligatorio)"></textarea>'
-      +   '<button class="confirmar" onclick="marcarNoEntregado(\''+o.id+'\')">Confirmar no entrega</button>'
+      +   '<textarea id="txtmotivo-'+o.id+'" placeholder="¿Por qué no se pudo? (obligatorio)"></textarea>'
+      +   '<button class="confirmar" onclick="marcarNoEntregado(\''+o.id+'\')">Confirmar</button>'
       + '</div>'
       + '</div>';
   });
