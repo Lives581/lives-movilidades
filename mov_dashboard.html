@@ -169,6 +169,7 @@
 <script>
 // =============== CONFIGURACIÓN ===============
 var SHEET_ID = '1p8zQ1h7yfufwolkuvfeOWUGMNyCh7r4v35nvXOv0rwg';
+var URL_APPS_SCRIPT = 'https://script.google.com/macros/s/AKfycbwY21RREcAXwgrruPzEgAkd_CcEj2PRJSb3ERRFCzOPSAzb2RS2h8zJ1CHDoM0i7UTN/exec';
 // Si este HTML es una copia estática exportada, DATOS_EMBEBIDOS ya viene lleno
 // y el dashboard no intenta conectarse al Sheet: solo lee estos datos congelados.
 var DATOS_EMBEBIDOS = null;
@@ -211,8 +212,7 @@ function cargarSolicitudes(){
   document.getElementById('cargandoMsg').style.display='block';
   document.getElementById('cuerpoDashboard').style.display='none';
   var s = document.createElement('script');
-  s.src = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-          '/gviz/tq?sheet=SOLICITUDES&tqx=out:json;responseHandler:procesarDatos&_=' + Date.now();
+  s.src = URL_APPS_SCRIPT + '?accion=listarsolicitudes&callback=procesarDatos';
   s.onerror = function(){ document.getElementById('cargandoMsg').textContent='Error al cargar. Revisa tu conexión.'; };
   document.body.appendChild(s);
 }
@@ -220,27 +220,28 @@ function cargarSolicitudes(){
 function procesarDatos(json){
   registros = [];
   try{
-    json.table.rows.forEach(function(r){
-      var c = r.c;
+    var filas = (json && json.filas) ? json.filas : [];
+    filas.forEach(function(row){
       var o = {
-        id:        String(val(c[0])||'').trim(),
-        fecha:     String(val(c[1])||'').trim(),
-        area:      String(val(c[2])||'').trim(),
-        origen:    String(val(c[3])||'').trim(),
-        tipo:      String(val(c[4])||'').trim(),
-        destino:   String(val(c[7])||'').trim(),
-        distrito:  String(val(c[8])||'').trim(),
-        zona:      String(val(c[9])||'').trim().toUpperCase(),
-        prioridad: String(val(c[10])||'').trim().toUpperCase(),
-        chofer:    String(val(c[12])||'').trim(),
-        fechaprog: String(val(c[13])||'').trim(),
-        estado:    String(val(c[14])||'PENDIENTE').trim().toUpperCase(),
-        hentrega:  String(val(c[16])||'').trim(),
-        hprog:     String(val(c[17])||'').trim(),
-        servicio:  String(val(c[20])||'ENVIO').trim().toUpperCase(),
-        hllegada:  String(val(c[21])||'').trim()
+        id:        String(row[0]||'').trim(),
+        fecha:     String(row[1]||'').trim(),
+        area:      String(row[2]||'').trim(),
+        origen:    String(row[3]||'').trim(),
+        tipo:      String(row[4]||'').trim(),
+        destino:   String(row[7]||'').trim(),
+        distrito:  String(row[8]||'').trim(),
+        zona:      String(row[9]||'').trim().toUpperCase(),
+        prioridad: String(row[10]||'').trim().toUpperCase(),
+        chofer:    String(row[12]||'').trim(),
+        fechaprog: String(row[13]||'').trim(),
+        estado:    String(row[14]||'PENDIENTE').trim().toUpperCase(),
+        hentrega:  String(row[16]||'').trim(),
+        hprog:     String(row[17]||'').trim(),
+        servicio:  String(row[20]||'ENVIO').trim().toUpperCase(),
+        hllegada:  String(row[21]||'').trim(),
+        fechanecesidad: String(row[23]||'').trim()
       };
-      if (!o.id || o.id.toUpperCase()==='ID') return;
+      if (!o.id) return;
       registros.push(o);
     });
   }catch(e){}
@@ -322,11 +323,28 @@ function aplicarFiltrosYRenderizar(){
   var cerradas = entr+noentr;
   var tasaNoEntrega = cerradas ? (noentr/cerradas*100) : 0;
 
+  // Vencidas: la fecha en que se necesitaba ya pasó y sigue sin cerrarse
+  function parseFechaFlexible(str){
+    if (!str) return null;
+    var m = String(str).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return new Date(parseInt(m[1],10), parseInt(m[2],10)-1, parseInt(m[3],10));
+    m = String(str).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (m) return new Date(parseInt(m[3],10), parseInt(m[2],10)-1, parseInt(m[1],10));
+    return null;
+  }
+  var hoy0 = new Date(); hoy0.setHours(0,0,0,0);
+  var vencidas = lista.filter(function(o){
+    if (o.estado==='ENTREGADO' || o.estado==='NO ENTREGADO') return false;
+    var f = parseFechaFlexible(o.fechanecesidad);
+    return f && f < hoy0;
+  }).length;
+
   // ---- KPIs ----
   var kpis = [
     {label:'Total solicitudes', valor: fmtInt(total), primary:true},
     {label:'Pendientes', valor: fmtInt(pend)},
     {label:'Urgentes sin cerrar', valor: fmtInt(urgentesPend), alerta: urgentesPend>0},
+    {label:'Vencidas (fecha ya pasó)', valor: fmtInt(vencidas), alerta: vencidas>0},
     {label:'En espera en punto', valor: fmtInt(espera)},
     {label:'Entregadas', valor: fmtInt(entr)},
     {label:'No entregadas', valor: fmtInt(noentr), alerta: noentr>0},
