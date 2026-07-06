@@ -71,6 +71,7 @@
   .est.prog{background:#DBEAFE; color:#1E40AF;}
   .est.entr{background:#D1FAE5; color:#065F46;}
   .est.noentr{background:#FEE2E2; color:#991B1B;}
+  .est.espera{background:#FEF3C7; color:#92400E;}
   .sin-res{text-align:center; color:var(--gris); font-size:13px; padding:16px; font-style:italic;}
 </style>
 </head>
@@ -83,7 +84,7 @@
 <div class="contenedor">
   <div class="tarjeta" id="formulario">
     <label>Área solicitante</label>
-    <input type="text" id="area" placeholder="Ej.: Avíos, Almacén, Comercial..." autocomplete="off">
+    <input type="text" id="area" placeholder="Ej.: Avíos, Almacén, Comercial..." autocomplete="off" list="listaAreas">
 
     <label>Tipo de servicio</label>
     <div class="fila-chips" id="chipsServicio">
@@ -126,6 +127,9 @@
       <div class="chip activo" data-valor="NO">No</div>
     </div>
 
+    <label>¿Para cuándo lo necesitas?</label>
+    <input type="date" id="fechaNecesidad">
+
     <label>Comentarios (opcional)</label>
     <textarea id="comentarios" placeholder="Referencias, persona que recibe, horario..."></textarea>
 
@@ -143,9 +147,9 @@
 
   <div class="tarjeta tarjeta-consulta">
     <h3>Consultar estado de mis solicitudes</h3>
-    <div class="sub">Escribe el nombre de tu área y elige un rango de fechas.</div>
-    <label>Área</label>
-    <input type="text" id="consultaArea" placeholder="Ej.: Avíos, Almacén..." autocomplete="off">
+    <div class="sub">Escribe el nombre de tu área (opcional) y/o elige un rango de fechas.</div>
+    <label>Área (opcional)</label>
+    <input type="text" id="consultaArea" placeholder="Ej.: Avíos, Almacén..." autocomplete="off" list="listaAreas">
     <div class="fila-fechas">
       <div>
         <label>Desde</label>
@@ -161,6 +165,8 @@
   </div>
 </div>
 
+<datalist id="listaAreas"></datalist>
+
 <footer>LIVES · Sistema de Movilidades · Uso interno</footer>
 
 <script>
@@ -172,30 +178,53 @@ var URL_APPS_SCRIPT = 'https://script.google.com/macros/s/AKfycbwY21RREcAXwgrruP
 var directorio = [];   // {nombre, distrito, zona}
 var sel = { origen:'', tipo:'', prioridad:'NO', servicio:'ENVIO' };
 
-// --- Cargar directorio (gviz) ---
+// --- Fecha de necesidad: por defecto hoy, no permite fechas pasadas ---
+(function initFechaNecesidad(){
+  var hoy = new Date();
+  var iso = hoy.getFullYear()+'-'+('0'+(hoy.getMonth()+1)).slice(-2)+'-'+('0'+hoy.getDate()).slice(-2);
+  var input = document.getElementById('fechaNecesidad');
+  input.min = iso;
+  input.value = iso;
+})();
+
+// --- Cargar áreas ya usadas, para el autocompletado (datalist) ---
+(function cargarAreas(){
+  var s = document.createElement('script');
+  s.src = URL_APPS_SCRIPT + '?accion=listarareas&callback=procesarAreas';
+  document.body.appendChild(s);
+})();
+function procesarAreas(json){
+  try{
+    var areas = (json && json.areas) ? json.areas : [];
+    var dl = document.getElementById('listaAreas');
+    dl.innerHTML = '';
+    areas.forEach(function(a){
+      var op = document.createElement('option');
+      op.value = a;
+      dl.appendChild(op);
+    });
+  }catch(e){}
+}
+window.procesarAreas = procesarAreas;
+
+// --- Cargar directorio (Apps Script: inmune a filtros visuales del Sheet) ---
 (function cargarDirectorio(){
   var s = document.createElement('script');
-  window.__gvizCB = function(){};
-  var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-            '/gviz/tq?sheet=DIRECTORIO&tqx=out:json;responseHandler:procesarDirectorio';
-  s.src = url;
+  s.src = URL_APPS_SCRIPT + '?accion=listardirectorio&callback=procesarDirectorio';
   s.onerror = function(){ selDestino().innerHTML = '<option value="">Error al cargar destinos</option>'; };
   document.body.appendChild(s);
 })();
 
 function procesarDirectorio(json){
   try{
-    var filas = json.table.rows;
+    var filas = (json && json.filas) ? json.filas : [];
     directorio = [];
     for (var i=0;i<filas.length;i++){
-      var c = filas[i].c;
-      var nombre  = c[2] && c[2].v ? String(c[2].v).trim() : '';
-      var zona    = c[3] && c[3].v ? String(c[3].v).trim() : '';
-      var distrito= c[4] && c[4].v ? String(c[4].v).trim() : '';
-      var nu = nombre.toUpperCase();
-      if (nombre && nu!=='PROVEEDOR' && nu!=='RAZON SOCIAL' && zona.toUpperCase()!=='ZONA') {
-        directorio.push({nombre:nombre, distrito:distrito, zona:zona});
-      }
+      var row = filas[i];
+      var nombre  = row[2] ? String(row[2]).trim() : '';
+      var zona    = row[3] ? String(row[3]).trim() : '';
+      var distrito= row[4] ? String(row[4]).trim() : '';
+      if (nombre) directorio.push({nombre:nombre, distrito:distrito, zona:zona});
     }
     directorio.sort(function(a,b){ return a.nombre.localeCompare(b.nombre); });
     var sd = selDestino();
@@ -211,7 +240,7 @@ function procesarDirectorio(json){
 }
 function selDestino(){ return document.getElementById('destino'); }
 
-// gviz usa responseHandler como nombre de función global
+// Apps Script usa el mismo patrón JSONP: responseHandler como función global
 window.procesarDirectorio = procesarDirectorio;
 
 // --- Mostrar distrito y zona al elegir destino ---
@@ -298,6 +327,7 @@ document.getElementById('btnEnviar').addEventListener('click', function(){
     cantidad: document.getElementById('cantidad').value || '',
     destino:d.nombre, distrito:d.distrito, zona:d.zona,
     prioridad:sel.prioridad,
+    fechanecesidad: document.getElementById('fechaNecesidad').value || '',
     comentarios: document.getElementById('comentarios').value.trim(),
     callback:'respuestaGuardar'
   };
@@ -345,6 +375,8 @@ document.getElementById('btnOtra').addEventListener('click', function(){
     c.classList.toggle('activo', c.getAttribute('data-valor')==='NO');
   });
   sel.prioridad='NO';
+  var hoy = new Date();
+  document.getElementById('fechaNecesidad').value = hoy.getFullYear()+'-'+('0'+(hoy.getMonth()+1)).slice(-2)+'-'+('0'+hoy.getDate()).slice(-2);
   document.getElementById('mensaje').className='mensaje';
   document.getElementById('pantallaExito').classList.remove('visible');
   document.getElementById('formulario').style.display='block';
@@ -364,13 +396,17 @@ function parseFecha(str){ // "dd/MM/yyyy HH:mm:ss" -> Date (solo fecha)
 
 document.getElementById('btnConsultar').addEventListener('click', function(){
   var area = document.getElementById('consultaArea').value.trim();
+  var desde = document.getElementById('consultaDesde').value;
+  var hasta = document.getElementById('consultaHasta').value;
   var cont = document.getElementById('resultadosConsulta');
-  if(!area){ cont.innerHTML='<div class="sin-res">Escribe el nombre de tu área.</div>'; return; }
+  if(!area && !desde && !hasta){
+    cont.innerHTML='<div class="sin-res">Escribe tu área o elige al menos una fecha para buscar.</div>';
+    return;
+  }
   cont.innerHTML='<div class="sin-res">Consultando...</div>';
-  window.__areaBuscada = normalizar(area);
+  window.__areaBuscada = area ? normalizar(area) : '';
   var s = document.createElement('script');
-  s.src = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-          '/gviz/tq?sheet=SOLICITUDES&tqx=out:json;responseHandler:procesarConsulta&_=' + Date.now();
+  s.src = URL_APPS_SCRIPT + '?accion=listarsolicitudes&callback=procesarConsulta';
   s.onerror = function(){ cont.innerHTML='<div class="sin-res">Error al consultar. Revisa tu conexión.</div>'; };
   document.body.appendChild(s);
 });
@@ -385,32 +421,33 @@ function procesarConsulta(json){
 
   var filas = [];
   try{
-    json.table.rows.forEach(function(r){
-      var c = r.c;
-      var idFila = String(valC(c[0])||'').trim();
-      if(idFila.toUpperCase()==='ID') return; // descartar encabezado
-      var areaFila = normalizar(valC(c[2]));
-      if(!areaFila) return;
-      // Coincidencia tolerante: una contiene a la otra
-      if(areaFila.indexOf(areaB) < 0 && areaB.indexOf(areaFila) < 0) return;
-      var fstr = String(valC(c[1])||'');
+    var todas = (json && json.filas) ? json.filas : [];
+    todas.forEach(function(row){
+      var areaFila = normalizar(row[2]);
+      if(areaB){
+        if(!areaFila) return;
+        // Coincidencia tolerante: una contiene a la otra
+        if(areaFila.indexOf(areaB) < 0 && areaB.indexOf(areaFila) < 0) return;
+      }
+      var fstr = String(row[1]||'');
       var f = parseFecha(fstr);
       if(desde && f && f < desde) return;
       if(hasta && f && f > hasta) return;
       filas.push({
-        id:String(valC(c[0])||''), fecha:fstr, destino:String(valC(c[7])||''),
-        distrito:String(valC(c[8])||''), zona:String(valC(c[9])||''),
-        estado:String(valC(c[14])||'PENDIENTE').toUpperCase(),
-        chofer:String(valC(c[12])||''), fechaprog:String(valC(c[13])||''),
-        motivo:String(valC(c[15])||''), servicio:String(valC(c[20])||'ENVIO').toUpperCase(),
-        num:(function(){var m=String(valC(c[0])).match(/MOV-(\d+)/);return m?parseInt(m[1],10):0;})()
+        id:String(row[0]||''), fecha:fstr, area:String(row[2]||''), destino:String(row[7]||''),
+        distrito:String(row[8]||''), zona:String(row[9]||''),
+        estado:String(row[14]||'PENDIENTE').toUpperCase(),
+        chofer:String(row[12]||''), fechaprog:String(row[13]||''),
+        motivo:String(row[15]||''), servicio:String(row[20]||'ENVIO').toUpperCase(),
+        fechanecesidad:String(row[23]||''),
+        num:(function(){var m=String(row[0]||'').match(/MOV-(\d+)/);return m?parseInt(m[1],10):0;})()
       });
     });
   }catch(e){}
 
   filas.sort(function(a,b){ return b.num - a.num; }); // más recientes primero
 
-  if(!filas.length){ cont.innerHTML='<div class="sin-res">No se encontraron solicitudes para esa área en ese rango.</div>'; return; }
+  if(!filas.length){ cont.innerHTML='<div class="sin-res">No se encontraron solicitudes con esos criterios.</div>'; return; }
 
   function badge(e){
     if(e==='PENDIENTE') return '<span class="est pend">PENDIENTE</span>';
@@ -420,6 +457,7 @@ function procesarConsulta(json){
     return '<span class="est pend">'+e+'</span>';
   }
   var html='';
+  var mostrarArea = !areaB; // si no filtró por área, aclarar de qué área es cada una
   filas.forEach(function(o){
     var extra='';
     if(o.estado==='PROGRAMADO' && o.chofer) extra='Chofer: '+o.chofer+(o.fechaprog?' · '+o.fechaprog:'');
@@ -428,7 +466,7 @@ function procesarConsulta(json){
     html += '<div class="item-consulta">'
       + '<div class="linea1"><span class="id">'+o.id+' · '+serv+'</span>'+badge(o.estado)+'</div>'
       + '<div class="dest">'+o.destino+' <span style="color:#9CA3AF">('+o.distrito+')</span></div>'
-      + '<div class="meta">'+o.fecha+(extra?' · '+extra:'')+'</div>'
+      + '<div class="meta">'+o.fecha+(o.fechanecesidad?' · Necesitado para: '+o.fechanecesidad:'')+(mostrarArea&&o.area?' · Área: '+o.area:'')+(extra?' · '+extra:'')+'</div>'
       + '</div>';
   });
   cont.innerHTML = html;
