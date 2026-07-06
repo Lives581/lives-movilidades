@@ -351,11 +351,10 @@ function render(){
   var html = '';
   lista.forEach(function(o){
     var esPend = o.estado === 'PENDIENTE';
-    var bloqueado = esPend && puntosBloqueados[o.destino.toUpperCase()];
-    var checkable = esPend && !bloqueado;
+    var enCurso = esPend && puntosBloqueados[o.destino.toUpperCase()]; // solo informativo, ya no bloquea
+    var checkable = esPend;
     var clases = [];
     if (seleccion[o.id]) clases.push('sel');
-    if (bloqueado) clases.push('bloqueado');
     if (o.estado==='PROGRAMADO') clases.push('programado');
     var cantPeso = o.tipo==='CARGA' ? (o.peso? o.peso+' kg':'—') : (o.cantidad? o.cantidad+' und':'—');
     var badgeServ = o.servicio==='RECOJO'
@@ -377,7 +376,7 @@ function render(){
     html += '<tr class="'+clases.join(' ')+'" data-id="'+o.id+'" data-zona="'+o.zona+'">'
       + '<td>'+(checkable
           ? '<input type="checkbox" class="chk chk-fila" data-id="'+o.id+'" '+(seleccion[o.id]?'checked':'')+'>'
-          : (bloqueado?'<span class="badge b-lock" title="Punto con despacho en curso">🔒</span>':''))+'</td>'
+          : '')+'</td>'
       + '<td class="id-col">'+o.id+'</td>'
       + '<td style="white-space:nowrap">'+accionesFila+'</td>'
       + '<td class="fh">'+o.fecha+'</td>'
@@ -387,7 +386,7 @@ function render(){
       + '<td>'+o.origen+' '+flechaBase+'</td>'
       + '<td>'+o.tipo+'</td>'
       + '<td>'+cantPeso+'</td>'
-      + '<td class="destino-col">'+o.destino+(bloqueado?' <span class="badge b-lock">en curso</span>':'')+'</td>'
+      + '<td class="destino-col">'+o.destino+(enCurso?' <span class="badge b-lock" title="Este punto ya tiene otro despacho en curso — puedes asignar igual, solo verifica con el equipo">⚠️ ya en curso</span>':'')+'</td>'
       + '<td>'+o.distrito+'</td>'
       + '<td><span class="badge b-zona">'+o.zona+'</span></td>'
       + '<td>'+badgeEstado(o.estado)+(o.motivo?'<br><span style="font-size:11px;color:#991B1B">'+o.motivo+'</span>':'')+'</td>'
