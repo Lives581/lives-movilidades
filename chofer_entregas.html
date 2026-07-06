@@ -36,6 +36,10 @@
   .card .accion-linea{font-size:12px; font-weight:800; letter-spacing:.5px; margin-bottom:2px;}
   .card .accion-linea.envio{color:var(--esmeralda);}
   .card .accion-linea.recojo{color:var(--monetario);}
+  .card.en-espera{border-left-color:var(--monetario); background:#FFFBEB;}
+  .badge-espera{background:#FEF3C7; color:#92400E; font-size:12px; font-weight:700; padding:8px 10px; border-radius:8px; text-align:center; margin-bottom:10px;}
+  .btn-llegue{width:100%; padding:13px; background:var(--monetario); color:#fff; border:none; border-radius:9px; font-size:15px; font-weight:700; cursor:pointer;}
+  .btn-llegue:disabled{background:var(--gris); cursor:not-allowed;}
   .card .destino{font-size:18px; font-weight:700; color:#111; margin-bottom:2px;}
   .card .distrito{font-size:13px; color:var(--gris); margin-bottom:10px;}
   .card .datos{font-size:13px; color:#374151; line-height:1.7; margin-bottom:12px;}
@@ -161,7 +165,7 @@ function procesarRuta(json){
       var chofer = normalizar(valC(c[12]));
       var estado = String(valC(c[14])||'').toUpperCase();
       if(chofer !== chN) return;
-      if(estado !== 'PROGRAMADO') return; // solo lo pendiente de entregar
+      if(estado !== 'PROGRAMADO' && estado !== 'EN_ESPERA') return; // solo lo activo del chofer
       solicitudes.push({
         id:String(valC(c[0])||''), tipo:String(valC(c[4])||''),
         cantidad:String(valC(c[5])||''), peso:String(valC(c[6])||''),
@@ -169,11 +173,14 @@ function procesarRuta(json){
         zona:String(valC(c[9])||'').toUpperCase(), prioridad:String(valC(c[10])||'').toUpperCase(),
         comentarios:String(valC(c[11])||''), fechaprog:String(valC(c[13])||''), area:String(valC(c[2])||''),
         origen:String(valC(c[3])||''), servicio:String(valC(c[20])||'ENVIO').toUpperCase(),
+        estado:estado,
         num:(function(){var m=String(valC(c[0])).match(/MOV-(\d+)/);return m?parseInt(m[1],10):0;})()
       });
     });
   }catch(e){}
   solicitudes.sort(function(a,b){
+    var ea=a.estado==='EN_ESPERA'?0:1, eb=b.estado==='EN_ESPERA'?0:1;
+    if(ea!==eb) return ea-eb;
     if(a.zona!==b.zona) return a.zona<b.zona?-1:1;
     var ua=a.prioridad==='SI'?0:1, ub=b.prioridad==='SI'?0:1;
     if(ua!==ub) return ua-ub;
@@ -191,28 +198,34 @@ function render(){
   solicitudes.forEach(function(o){
     var cantPeso = o.tipo.toUpperCase()==='CARGA' ? (o.peso? o.peso+' kg':'—') : (o.cantidad? o.cantidad+' und':'—');
     var esRecojo = o.servicio==='RECOJO';
+    var enEspera = o.estado==='EN_ESPERA';
     var badgeServ = esRecojo ? '<span class="badge-serv recojo">RECOJO</span>' : '<span class="badge-serv envio">ENVÍO</span>';
     var lineaAccion = esRecojo
         ? '<div class="accion-linea recojo">📥 RECOGER EN:</div><div class="destino">'+o.destino+'</div><div class="distrito">'+o.distrito+' · luego llevar a <b>'+o.origen+'</b></div>'
         : '<div class="accion-linea envio">📤 ENTREGAR EN:</div><div class="destino">'+o.destino+'</div><div class="distrito">'+o.distrito+'</div>';
     var txtBtnOk = esRecojo ? '✓ Recogido' : '✓ Entregado';
-    html += '<div class="card '+(o.prioridad==='SI'?'urgente':'')+'" id="card-'+o.id+'">'
+    var bloqueEspera = enEspera ? '<div class="badge-espera">⏳ Ya llegaste · en espera de '+(esRecojo?'recojo':'entrega')+'</div>' : '';
+    var accionesHtml = enEspera
+        ? ('<div class="acciones">'
+          +   '<button class="btn-entregado" onclick="marcarEntregado(\''+o.id+'\')">'+txtBtnOk+'</button>'
+          +   '<button class="btn-noentregado" onclick="mostrarMotivo(\''+o.id+'\')">No se pudo</button>'
+          + '</div>'
+          + '<label class="btn-foto" id="lblfoto-'+o.id+'" for="foto-'+o.id+'">📷 Tomar foto (opcional)</label>'
+          + '<input type="file" accept="image/*" capture="environment" class="foto-input" id="foto-'+o.id+'" onchange="capturarFoto(\''+o.id+'\', this)">'
+          + '<div class="preview" id="prev-'+o.id+'"></div>'
+          + '<div class="motivo-box" id="motivo-'+o.id+'">'
+          +   '<textarea id="txtmotivo-'+o.id+'" placeholder="¿Por qué no se pudo? (obligatorio)"></textarea>'
+          +   '<button class="confirmar" onclick="marcarNoEntregado(\''+o.id+'\')">Confirmar</button>'
+          + '</div>')
+        : ('<button class="btn-llegue" onclick="marcarLlegue(\''+o.id+'\')">📍 Llegué al punto</button>');
+    html += '<div class="card '+(o.prioridad==='SI'?'urgente':'')+' '+(enEspera?'en-espera':'')+'" id="card-'+o.id+'">'
       + '<div class="top"><span class="id">'+o.id+'</span>'
       +   '<span>'+badgeServ+' '+(o.prioridad==='SI'?'<span class="badge-urg">URGENTE</span> ':'')+'<span class="badge-zona">'+o.zona+'</span></span></div>'
       + lineaAccion
       + '<div class="datos"><b>Tipo:</b> '+o.tipo+' · <b>'+cantPeso+'</b><br><b>Área:</b> '+o.area+'</div>'
       + (o.comentarios? '<div class="coment">📝 '+o.comentarios+'</div>':'')
-      + '<div class="acciones">'
-      +   '<button class="btn-entregado" onclick="marcarEntregado(\''+o.id+'\')">'+txtBtnOk+'</button>'
-      +   '<button class="btn-noentregado" onclick="mostrarMotivo(\''+o.id+'\')">No se pudo</button>'
-      + '</div>'
-      + '<label class="btn-foto" id="lblfoto-'+o.id+'" for="foto-'+o.id+'">📷 Tomar foto (opcional)</label>'
-      + '<input type="file" accept="image/*" capture="environment" class="foto-input" id="foto-'+o.id+'" onchange="capturarFoto(\''+o.id+'\', this)">'
-      + '<div class="preview" id="prev-'+o.id+'"></div>'
-      + '<div class="motivo-box" id="motivo-'+o.id+'">'
-      +   '<textarea id="txtmotivo-'+o.id+'" placeholder="¿Por qué no se pudo? (obligatorio)"></textarea>'
-      +   '<button class="confirmar" onclick="marcarNoEntregado(\''+o.id+'\')">Confirmar</button>'
-      + '</div>'
+      + bloqueEspera
+      + accionesHtml
       + '</div>';
   });
   lista.innerHTML = html;
@@ -254,6 +267,37 @@ function obtenerUbicacion(){
     );
   });
 }
+
+// ---------- Marcar llegada al punto ----------
+function marcarLlegue(id){
+  var card = document.getElementById('card-'+id);
+  var btn = card.querySelector('.btn-llegue');
+  btn.disabled = true; btn.textContent = 'Registrando llegada...';
+  obtenerUbicacion().then(function(u){
+    var params = {
+      accion:'llegue', id:id, lat:u.lat||'', lng:u.lng||'', chofer:choferActual, callback:'respLlegue'
+    };
+    var qs = Object.keys(params).map(function(k){return encodeURIComponent(k)+'='+encodeURIComponent(params[k]);}).join('&');
+    var s = document.createElement('script');
+    s.src = URL_APPS_SCRIPT + '?' + qs;
+    window.__idEnCurso = id;
+    s.onerror = function(){ mostrarToast('Error de conexión','error'); btn.disabled=false; btn.textContent='📍 Llegué al punto'; };
+    document.body.appendChild(s);
+  });
+}
+window.respLlegue = function(r){
+  var id = window.__idEnCurso;
+  if(r && r.ok){
+    mostrarToast('Llegada registrada','exito');
+    var o = solicitudes.find(function(x){return x.id===id;});
+    if(o) o.estado='EN_ESPERA';
+    render();
+  } else {
+    mostrarToast((r&&r.msg)?r.msg:'Error al registrar llegada','error');
+    var card = document.getElementById('card-'+id);
+    if(card){ var btn=card.querySelector('.btn-llegue'); if(btn){ btn.disabled=false; btn.textContent='📍 Llegué al punto'; } }
+  }
+};
 
 // ---------- Marcar entregado ----------
 function marcarEntregado(id){
