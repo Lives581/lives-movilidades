@@ -148,6 +148,7 @@
         <th>ID</th>
         <th>Acciones</th>
         <th>Fecha / Hora solicitud</th>
+        <th>Fecha necesaria</th>
         <th>Servicio</th>
         <th>Prioridad</th>
         <th>Área</th>
@@ -167,7 +168,7 @@
       </tr>
     </thead>
     <tbody id="cuerpo">
-      <tr><td colspan="18" class="cargando">Cargando solicitudes...</td></tr>
+      <tr><td colspan="19" class="cargando">Cargando solicitudes...</td></tr>
     </tbody>
   </table>
 </div>
@@ -226,21 +227,20 @@ var puntosBloqueados = {};  // DESTINO(mayus) -> true si tiene PROGRAMADO sin ce
 var seleccion = {};         // id -> true
 var filtro = { zona:'', urg:false, estado:'PENDIENTE', buscar:'', chofer:'' };
 
-// ---------- Cargar CHOFERES ----------
+// ---------- Cargar CHOFERES (Apps Script: inmune a filtros visuales del Sheet) ----------
 function cargarChoferes(){
   var s = document.createElement('script');
-  s.src = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-          '/gviz/tq?sheet=CHOFERES&tqx=out:json;responseHandler:procesarChoferes&_=' + Date.now();
+  s.src = URL_APPS_SCRIPT + '?accion=listarchoferes&callback=procesarChoferes';
   document.body.appendChild(s);
 }
 function procesarChoferes(json){
   choferes = [];
   try{
-    json.table.rows.forEach(function(r){
-      var c = r.c;
-      var nombre = c[0] && c[0].v ? String(c[0].v).trim() : '';
-      var activo = c[3] && c[3].v ? String(c[3].v).trim().toUpperCase() : 'SI';
-      if (nombre && nombre.toUpperCase() !== 'CHOFER' && activo !== 'NO') choferes.push(nombre);
+    var filas = (json && json.filas) ? json.filas : [];
+    filas.forEach(function(row){
+      var nombre = row[0] ? String(row[0]).trim() : '';
+      var activo = row[3] ? String(row[3]).trim().toUpperCase() : 'SI';
+      if (nombre && activo !== 'NO') choferes.push(nombre);
     });
   }catch(e){}
   var sel = document.getElementById('selChofer');
@@ -258,45 +258,44 @@ window.procesarChoferes = procesarChoferes;
 
 // ---------- Cargar SOLICITUDES ----------
 function cargarSolicitudes(){
-  document.getElementById('cuerpo').innerHTML = '<tr><td colspan="18" class="cargando">Cargando solicitudes...</td></tr>';
+  document.getElementById('cuerpo').innerHTML = '<tr><td colspan="19" class="cargando">Cargando solicitudes...</td></tr>';
   var s = document.createElement('script');
-  s.src = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-          '/gviz/tq?sheet=SOLICITUDES&tqx=out:json;responseHandler:procesarSolicitudes&_=' + Date.now();
-  s.onerror = function(){ document.getElementById('cuerpo').innerHTML='<tr><td colspan="18" class="vacio">Error al cargar. Revisa tu conexión.</td></tr>'; };
+  s.src = URL_APPS_SCRIPT + '?accion=listarsolicitudes&callback=procesarSolicitudes';
+  s.onerror = function(){ document.getElementById('cuerpo').innerHTML='<tr><td colspan="19" class="vacio">Error al cargar. Revisa tu conexión.</td></tr>'; };
   document.body.appendChild(s);
 }
-function val(c){ return c && (c.f !== undefined && c.f !== null ? c.f : c.v) != null ? (c.f !== undefined && c.f !== null ? c.f : c.v) : ''; }
 
 function procesarSolicitudes(json){
   solicitudes = [];
   puntosBloqueados = {};
   try{
-    json.table.rows.forEach(function(r){
-      var c = r.c;
+    var filas = (json && json.filas) ? json.filas : [];
+    filas.forEach(function(row){
       var o = {
-        id:        String(val(c[0])||'').trim(),
-        fecha:     String(val(c[1])||'').trim(),
-        area:      String(val(c[2])||'').trim(),
-        origen:    String(val(c[3])||'').trim(),
-        tipo:      String(val(c[4])||'').trim(),
-        cantidad:  String(val(c[5])||'').trim(),
-        peso:      String(val(c[6])||'').trim(),
-        destino:   String(val(c[7])||'').trim(),
-        distrito:  String(val(c[8])||'').trim(),
-        zona:      String(val(c[9])||'').trim().toUpperCase(),
-        prioridad: String(val(c[10])||'').trim().toUpperCase(),
-        comentarios:String(val(c[11])||'').trim(),
-        chofer:    String(val(c[12])||'').trim(),
-        fechaprog: String(val(c[13])||'').trim(),
-        estado:    String(val(c[14])||'PENDIENTE').trim().toUpperCase(),
-        motivo:    String(val(c[15])||'').trim(),
-        hentrega:  String(val(c[16])||'').trim(),
-        hprog:     String(val(c[17])||'').trim(),
-        ubicacion: String(val(c[18])||'').trim(),
-        foto:      String(val(c[19])||'').trim(),
-        servicio:  String(val(c[20])||'ENVIO').trim().toUpperCase(),
-        hllegada:  String(val(c[21])||'').trim(),
-        ubicacionllegada: String(val(c[22])||'').trim()
+        id:        String(row[0]||'').trim(),
+        fecha:     String(row[1]||'').trim(),
+        area:      String(row[2]||'').trim(),
+        origen:    String(row[3]||'').trim(),
+        tipo:      String(row[4]||'').trim(),
+        cantidad:  String(row[5]||'').trim(),
+        peso:      String(row[6]||'').trim(),
+        destino:   String(row[7]||'').trim(),
+        distrito:  String(row[8]||'').trim(),
+        zona:      String(row[9]||'').trim().toUpperCase(),
+        prioridad: String(row[10]||'').trim().toUpperCase(),
+        comentarios:String(row[11]||'').trim(),
+        chofer:    String(row[12]||'').trim(),
+        fechaprog: String(row[13]||'').trim(),
+        estado:    String(row[14]||'PENDIENTE').trim().toUpperCase(),
+        motivo:    String(row[15]||'').trim(),
+        hentrega:  String(row[16]||'').trim(),
+        hprog:     String(row[17]||'').trim(),
+        ubicacion: String(row[18]||'').trim(),
+        foto:      String(row[19]||'').trim(),
+        servicio:  String(row[20]||'ENVIO').trim().toUpperCase(),
+        hllegada:  String(row[21]||'').trim(),
+        ubicacionllegada: String(row[22]||'').trim(),
+        fechanecesidad: String(row[23]||'').trim()
       };
       if (!o.id) return;
       if (o.id.toUpperCase() === 'ID') return; // descartar fila de encabezado
@@ -332,6 +331,23 @@ function pasaFiltros(o){
   return true;
 }
 
+// Acepta 'yyyy-mm-dd' o 'dd/mm/yyyy' (Sheets a veces reformatea la fecha al guardarla)
+function parseFechaFlexible(str){
+  if (!str) return null;
+  var m = String(str).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return new Date(parseInt(m[1],10), parseInt(m[2],10)-1, parseInt(m[3],10));
+  m = String(str).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return new Date(parseInt(m[3],10), parseInt(m[2],10)-1, parseInt(m[1],10));
+  return null;
+}
+function estaVencida(o){
+  if (o.estado==='ENTREGADO' || o.estado==='NO ENTREGADO') return false;
+  var f = parseFechaFlexible(o.fechanecesidad);
+  if (!f) return false;
+  var hoy = new Date(); hoy.setHours(0,0,0,0);
+  return f < hoy;
+}
+
 function badgeEstado(e){
   if (e==='PENDIENTE') return '<span class="badge b-pend">PENDIENTE</span>';
   if (e==='PROGRAMADO') return '<span class="badge b-prog">PROGRAMADO</span>';
@@ -345,7 +361,7 @@ function render(){
   var lista = ordenar(solicitudes.filter(pasaFiltros));
   var cuerpo = document.getElementById('cuerpo');
   if (!lista.length){
-    cuerpo.innerHTML = '<tr><td colspan="18" class="vacio">No hay solicitudes con estos filtros.</td></tr>';
+    cuerpo.innerHTML = '<tr><td colspan="19" class="vacio">No hay solicitudes con estos filtros.</td></tr>';
     actualizarResumen(); actualizarBarra(); return;
   }
   var html = '';
@@ -380,6 +396,7 @@ function render(){
       + '<td class="id-col">'+o.id+'</td>'
       + '<td style="white-space:nowrap">'+accionesFila+'</td>'
       + '<td class="fh">'+o.fecha+'</td>'
+      + '<td class="fh">'+(o.fechanecesidad||'—')+(estaVencida(o)?' <span class="badge b-lock" title="La fecha en que se necesitaba ya pasó y sigue sin cerrarse">⚠️ vencida</span>':'')+'</td>'
       + '<td>'+badgeServ+'</td>'
       + '<td>'+(o.prioridad==='SI'?'<span class="badge b-urg">URGENTE</span>':'<span style="color:#9CA3AF">Normal</span>')+'</td>'
       + '<td>'+o.area+'</td>'
@@ -553,7 +570,7 @@ document.getElementById('btnExcel').addEventListener('click', function(){
       'Punto': o.destino, 'Distrito': o.distrito, 'Zona': o.zona,
       'Estado': o.estado, 'Chofer': o.chofer, 'Fecha Programada': o.fechaprog,
       'Hora Programación': o.hprog, 'Hora Llegada': o.hllegada, 'Hora Entrega': o.hentrega,
-      'Motivo No Entrega': o.motivo, 'Comentarios': o.comentarios
+      'Fecha Necesaria': o.fechanecesidad, 'Motivo No Entrega': o.motivo, 'Comentarios': o.comentarios
     };
   });
   var ws = XLSX.utils.json_to_sheet(filas);
