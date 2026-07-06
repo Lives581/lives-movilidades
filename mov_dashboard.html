@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard de Movilidades — LIVES</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --petroleo:#0E3B36; --petroleo-dark:#082722; --esmeralda:#10B981;
+    --alerta:#DC2626; --monetario:#F59E0B; --fondo:#F1F6F4; --gris:#6B7280;
+    --borde:#D1D5DB; --gris-claro:#F3F4F6; --bg-soft:#F7FBF9;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; font-family:Calibri,'Segoe UI',Arial,sans-serif;}
+  body{background:var(--fondo); color:#333;}
+  header{background:var(--petroleo); color:#fff; padding:18px 28px; display:flex; align-items:center; justify-content:space-between;}
+  header .titulo{font-size:19px; font-weight:600;}
+  header .titulo .sub{display:block; font-size:12px; font-weight:400; color:#CFEFE6; margin-top:2px;}
+  header .marca{font-size:22px; font-weight:300; letter-spacing:7px;}
+
+  .barra-filtros{background:#fff; border-bottom:1px solid var(--borde); padding:12px 28px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; position:sticky; top:0; z-index:40;}
+  .grupo{display:flex; gap:6px; align-items:center;}
+  .grupo label{font-size:12px; font-weight:600; color:var(--gris);}
+  .grupo select, .grupo input[type=date]{padding:7px 9px; border:1px solid var(--borde); border-radius:7px; font-size:13px;}
+  .chip{padding:6px 12px; border:1.5px solid var(--borde); border-radius:20px; background:#fff; font-size:12px; font-weight:600; color:var(--gris); cursor:pointer;}
+  .chip.activo{background:var(--petroleo); color:#fff; border-color:var(--petroleo);}
+  .btn-accion{padding:8px 14px; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer; border:1.5px solid var(--esmeralda); background:#fff; color:#065F46;}
+  .btn-accion.solido{background:var(--esmeralda); color:#fff;}
+  .btn-accion.export-estatico{border-color:var(--petroleo); color:var(--petroleo); margin-left:auto;}
+  .nota-estatica{background:#FFFBEB; border-left:4px solid var(--monetario); padding:9px 14px; font-size:12px; color:#92400E; display:none;}
+  .nota-estatica.visible{display:block;}
+
+  .contenido{padding:20px 28px 60px;}
+  .grid-kpi{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; margin-bottom:20px;}
+  .kpi-card{background:#fff; border:1px solid var(--borde); border-radius:8px; padding:16px 18px;}
+  .kpi-card.primary{border:2px solid var(--esmeralda); background:var(--bg-soft);}
+  .kpi-card .label{font-size:11px; font-weight:700; color:var(--gris); text-transform:uppercase; letter-spacing:.4px;}
+  .kpi-card .valor{font-size:26px; font-weight:700; color:var(--petroleo); margin-top:6px;}
+  .kpi-card.primary .valor{font-size:32px;}
+  .kpi-card .delta{font-size:11px; margin-top:4px; font-weight:600;}
+  .kpi-card .delta.alerta{color:var(--alerta);}
+  .kpi-card .delta.ok{color:var(--esmeralda);}
+
+  .grid-paneles{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;}
+  .grid-paneles.uno{grid-template-columns:1fr;}
+  .panel{background:#fff; border:1px solid var(--borde); border-radius:8px; padding:16px 18px;}
+  .panel h3{font-size:14px; font-weight:600; color:var(--petroleo); margin-bottom:12px;}
+  .panel canvas{max-height:280px;}
+
+  table.rank{width:100%; border-collapse:collapse; font-size:13px;}
+  table.rank th{text-align:left; padding:8px 6px; border-bottom:2px solid var(--petroleo); color:var(--petroleo); font-size:11px; text-transform:uppercase;}
+  table.rank td{padding:8px 6px; border-bottom:1px solid var(--gris-claro);}
+  table.rank tr:hover{background:var(--bg-soft);}
+  .barra-mini{height:8px; background:var(--esmeralda); border-radius:4px;}
+  .barra-mini-cont{background:var(--gris-claro); border-radius:4px; overflow:hidden; width:100%;}
+
+  .nota{background:#fff; border-left:4px solid var(--monetario); padding:10px 14px; font-size:11.5px; color:var(--gris); margin-bottom:16px; border-radius:0 6px 6px 0;}
+  .cargando, .vacio{padding:60px; text-align:center; color:var(--gris); font-style:italic;}
+  .toast{position:fixed; top:70px; right:22px; padding:14px 18px; border-radius:10px; font-size:14px; font-weight:600; z-index:100; display:none; box-shadow:0 4px 14px rgba(0,0,0,.15);}
+  .toast.exito{display:block; background:#ECFDF5; color:#065F46; border:1px solid var(--esmeralda);}
+  .toast.error{display:block; background:#FEF2F2; color:var(--alerta); border:1px solid var(--alerta);}
+  footer{text-align:center; color:var(--gris); font-size:11px; padding:16px;}
+
+  @media (max-width:900px){ .grid-paneles{grid-template-columns:1fr;} }
+  @media print{ .barra-filtros, .btn-accion{display:none;} body{background:#fff;} }
+</style>
+</head>
+<body>
+<header>
+  <div class="titulo">Dashboard de Movilidades
+    <span class="sub" id="subtituloFecha">Cargando datos...</span>
+  </div>
+  <div class="marca">LIVES</div>
+</header>
+
+<div class="barra-filtros">
+  <div class="grupo">
+    <label>Zona:</label>
+    <span class="chip activo" data-f="zona" data-v="">Todas</span>
+    <span class="chip" data-f="zona" data-v="NORTE">Norte</span>
+    <span class="chip" data-f="zona" data-v="SUR">Sur</span>
+    <span class="chip" data-f="zona" data-v="ESTE">Este</span>
+    <span class="chip" data-f="zona" data-v="OESTE">Oeste</span>
+  </div>
+  <div class="grupo">
+    <label>Chofer:</label>
+    <select id="fChofer"><option value="">Todos</option></select>
+  </div>
+  <div class="grupo">
+    <label>Servicio:</label>
+    <select id="fServicio">
+      <option value="">Todos</option>
+      <option value="ENVIO">Envío</option>
+      <option value="RECOJO">Recojo</option>
+    </select>
+  </div>
+  <div class="grupo">
+    <label>Desde:</label>
+    <input type="date" id="fDesde">
+    <label>Hasta:</label>
+    <input type="date" id="fHasta">
+  </div>
+  <button class="btn-accion solido" id="btnActualizar">Actualizar</button>
+  <button class="btn-accion" id="btnExcel">📊 Excel</button>
+  <button class="btn-accion export-estatico" id="btnExportarEstatico">📌 Exportar copia para lectores</button>
+</div>
+
+<div class="nota-estatica" id="notaEstatica"></div>
+
+<div class="contenido" id="contenido">
+  <div class="cargando" id="cargandoMsg">Cargando datos del Sheet...</div>
+  <div id="cuerpoDashboard" style="display:none">
+
+    <div class="grid-kpi" id="gridKpi"></div>
+
+    <div class="nota">Los tiempos de espera se calculan entre la hora de llegada del chofer al punto y la hora de cierre (entregado/no entregado). Solicitudes sin ambos timestamps no entran en ese promedio. Los datos reflejan lo registrado en el Sheet al momento de la consulta.</div>
+
+    <div class="grid-paneles">
+      <div class="panel">
+        <h3>Solicitudes por zona</h3>
+        <canvas id="chartZona"></canvas>
+      </div>
+      <div class="panel">
+        <h3>Estado actual de las solicitudes</h3>
+        <canvas id="chartEstado"></canvas>
+      </div>
+    </div>
+
+    <div class="grid-paneles">
+      <div class="panel">
+        <h3>Tiempo promedio de espera en el punto por zona (minutos)</h3>
+        <canvas id="chartEsperaZona"></canvas>
+      </div>
+      <div class="panel">
+        <h3>Envío vs Recojo</h3>
+        <canvas id="chartServicio"></canvas>
+      </div>
+    </div>
+
+    <div class="grid-paneles uno">
+      <div class="panel">
+        <h3>Solicitudes registradas por día</h3>
+        <canvas id="chartTendencia"></canvas>
+      </div>
+    </div>
+
+    <div class="grid-paneles">
+      <div class="panel">
+        <h3>Ranking por chofer — entregas y tiempo promedio de espera</h3>
+        <table class="rank" id="tablaChoferes"><thead>
+          <tr><th>Chofer</th><th>Entregas</th><th>Espera prom.</th><th></th></tr>
+        </thead><tbody></tbody></table>
+      </div>
+      <div class="panel">
+        <h3>Ranking por punto/destino — más frecuentes</h3>
+        <table class="rank" id="tablaPuntos"><thead>
+          <tr><th>Punto</th><th>Zona</th><th>Solicitudes</th><th></th></tr>
+        </thead><tbody></tbody></table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<footer>LIVES · Sistema de Movilidades · Uso interno</footer>
+
+<script>
+// =============== CONFIGURACIÓN ===============
+var SHEET_ID = '1p8zQ1h7yfufwolkuvfeOWUGMNyCh7r4v35nvXOv0rwg';
+// Si este HTML es una copia estática exportada, DATOS_EMBEBIDOS ya viene lleno
+// y el dashboard no intenta conectarse al Sheet: solo lee estos datos congelados.
+var DATOS_EMBEBIDOS = null;
+var FECHA_EXPORTACION = null;
+// =============================================
+
+var COLORES = ['#10B981','#0E3B36','#F59E0B','#DC2626','#839CA7','#A89C82'];
+Chart.defaults.font.family = 'Calibri, Arial, sans-serif';
+Chart.defaults.font.size = 12;
+Chart.defaults.color = '#6B7280';
+Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(14,59,54,0.95)';
+Chart.defaults.plugins.tooltip.padding = 10;
+Chart.defaults.plugins.tooltip.cornerRadius = 4;
+
+var registros = [];      // dataset completo (sin filtrar)
+var choferesLista = [];
+var graficos = {};       // instancias Chart.js para poder destruir/redibujar
+var filtro = { zona:'', chofer:'', servicio:'', desde:'', hasta:'' };
+
+function val(c){ return c && (c.f !== undefined && c.f !== null ? c.f : c.v) != null ? (c.f !== undefined && c.f !== null ? c.f : c.v) : ''; }
+
+// ---------- Carga de datos (live o congelada) ----------
+function iniciar(){
+  if (DATOS_EMBEBIDOS){
+    registros = DATOS_EMBEBIDOS;
+    choferesLista = Array.from(new Set(registros.map(function(r){return r.chofer;}).filter(Boolean))).sort();
+    document.getElementById('notaEstatica').className = 'nota-estatica visible';
+    document.getElementById('notaEstatica').textContent =
+      '📌 Copia estática exportada el ' + (FECHA_EXPORTACION||'') + '. Los filtros y gráficos son interactivos, pero los datos no se actualizan: no está conectada al Sheet en vivo.';
+    document.getElementById('btnActualizar').style.display = 'none';
+    document.getElementById('btnExportarEstatico').style.display = 'none';
+    prepararFiltros();
+    aplicarFiltrosYRenderizar();
+  } else {
+    cargarSolicitudes();
+  }
+}
+
+function cargarSolicitudes(){
+  document.getElementById('cargandoMsg').style.display='block';
+  document.getElementById('cuerpoDashboard').style.display='none';
+  var s = document.createElement('script');
+  s.src = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+          '/gviz/tq?sheet=SOLICITUDES&tqx=out:json;responseHandler:procesarDatos&_=' + Date.now();
+  s.onerror = function(){ document.getElementById('cargandoMsg').textContent='Error al cargar. Revisa tu conexión.'; };
+  document.body.appendChild(s);
+}
+
+function procesarDatos(json){
+  registros = [];
+  try{
+    json.table.rows.forEach(function(r){
+      var c = r.c;
+      var o = {
+        id:        String(val(c[0])||'').trim(),
+        fecha:     String(val(c[1])||'').trim(),
+        area:      String(val(c[2])||'').trim(),
+        origen:    String(val(c[3])||'').trim(),
+        tipo:      String(val(c[4])||'').trim(),
+        destino:   String(val(c[7])||'').trim(),
+        distrito:  String(val(c[8])||'').trim(),
+        zona:      String(val(c[9])||'').trim().toUpperCase(),
+        prioridad: String(val(c[10])||'').trim().toUpperCase(),
+        chofer:    String(val(c[12])||'').trim(),
+        fechaprog: String(val(c[13])||'').trim(),
+        estado:    String(val(c[14])||'PENDIENTE').trim().toUpperCase(),
+        hentrega:  String(val(c[16])||'').trim(),
+        hprog:     String(val(c[17])||'').trim(),
+        servicio:  String(val(c[20])||'ENVIO').trim().toUpperCase(),
+        hllegada:  String(val(c[21])||'').trim()
+      };
+      if (!o.id || o.id.toUpperCase()==='ID') return;
+      registros.push(o);
+    });
+  }catch(e){}
+  choferesLista = Array.from(new Set(registros.map(function(r){return r.chofer;}).filter(Boolean))).sort();
+  prepararFiltros();
+  aplicarFiltrosYRenderizar();
+}
+window.procesarDatos = procesarDatos;
+
+function prepararFiltros(){
+  var sel = document.getElementById('fChofer');
+  sel.innerHTML = '<option value="">Todos</option>';
+  choferesLista.forEach(function(ch){
+    var op=document.createElement('option'); op.value=ch; op.textContent=ch; sel.appendChild(op);
+  });
+}
+
+// ---------- Parseo de fecha "dd/MM/yyyy HH:mm:ss" ----------
+function parseFH(str){
+  var m = String(str||'').match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/);
+  if(!m) return null;
+  return new Date(parseInt(m[3],10), parseInt(m[2],10)-1, parseInt(m[1],10), parseInt(m[4],10), parseInt(m[5],10), parseInt(m[6],10));
+}
+function soloFecha(str){
+  var m = String(str||'').match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if(!m) return null;
+  return new Date(parseInt(m[3],10), parseInt(m[2],10)-1, parseInt(m[1],10));
+}
+
+function pasaFiltro(o){
+  if (filtro.zona && o.zona !== filtro.zona) return false;
+  if (filtro.chofer && o.chofer !== filtro.chofer) return false;
+  if (filtro.servicio && o.servicio !== filtro.servicio) return false;
+  if (filtro.desde || filtro.hasta){
+    var f = soloFecha(o.fecha);
+    if (!f) return false;
+    if (filtro.desde && f < new Date(filtro.desde+'T00:00:00')) return false;
+    if (filtro.hasta && f > new Date(filtro.hasta+'T23:59:59')) return false;
+  }
+  return true;
+}
+
+function fmtInt(n){ return n.toLocaleString('es-PE'); }
+function fmtMin(min){
+  if (min==null) return '—';
+  if (min < 60) return Math.round(min)+' min';
+  var h = Math.floor(min/60), m = Math.round(min%60);
+  return h+'h '+m+'min';
+}
+
+// ---------- Cálculo de KPIs y render ----------
+function aplicarFiltrosYRenderizar(){
+  document.getElementById('cargandoMsg').style.display='none';
+  document.getElementById('cuerpoDashboard').style.display='block';
+  if (!DATOS_EMBEBIDOS){
+    document.getElementById('subtituloFecha').textContent = 'Datos actualizados: ' + new Date().toLocaleString('es-PE');
+  }
+
+  var lista = registros.filter(pasaFiltro);
+  var total = lista.length;
+  var pend = lista.filter(function(o){return o.estado==='PENDIENTE';}).length;
+  var prog = lista.filter(function(o){return o.estado==='PROGRAMADO';}).length;
+  var espera = lista.filter(function(o){return o.estado==='EN_ESPERA';}).length;
+  var entr = lista.filter(function(o){return o.estado==='ENTREGADO';}).length;
+  var noentr = lista.filter(function(o){return o.estado==='NO ENTREGADO';}).length;
+  var urgentesPend = lista.filter(function(o){return o.prioridad==='SI' && (o.estado==='PENDIENTE'||o.estado==='PROGRAMADO');}).length;
+
+  // Tiempo de espera en punto: hllegada -> hentrega, solo cerradas con ambos timestamps
+  var esperas = [];
+  lista.forEach(function(o){
+    if ((o.estado==='ENTREGADO'||o.estado==='NO ENTREGADO') && o.hllegada && o.hentrega){
+      var t1 = parseFH(o.hllegada), t2 = parseFH(o.hentrega);
+      if (t1 && t2 && t2>=t1) esperas.push({min:(t2-t1)/60000, zona:o.zona, chofer:o.chofer});
+    }
+  });
+  var esperaProm = esperas.length ? esperas.reduce(function(a,b){return a+b.min;},0)/esperas.length : null;
+
+  // Tasa de no entrega (sobre cerradas)
+  var cerradas = entr+noentr;
+  var tasaNoEntrega = cerradas ? (noentr/cerradas*100) : 0;
+
+  // ---- KPIs ----
+  var kpis = [
+    {label:'Total solicitudes', valor: fmtInt(total), primary:true},
+    {label:'Pendientes', valor: fmtInt(pend)},
+    {label:'Urgentes sin cerrar', valor: fmtInt(urgentesPend), alerta: urgentesPend>0},
+    {label:'En espera en punto', valor: fmtInt(espera)},
+    {label:'Entregadas', valor: fmtInt(entr)},
+    {label:'No entregadas', valor: fmtInt(noentr), alerta: noentr>0},
+    {label:'Tasa no entrega', valor: cerradas? tasaNoEntrega.toFixed(1)+'%':'—', alerta: tasaNoEntrega>10},
+    {label:'Espera prom. en punto', valor: fmtMin(esperaProm)}
+  ];
+  document.getElementById('gridKpi').innerHTML = kpis.map(function(k){
+    return '<div class="kpi-card '+(k.primary?'primary':'')+'">'
+      + '<div class="label">'+k.label+'</div>'
+      + '<div class="valor" style="'+(k.alerta?'color:var(--alerta)':'')+'">'+k.valor+'</div>'
+      + '</div>';
+  }).join('');
+
+  // ---- Gráfico: solicitudes por zona ----
+  var zonas = ['NORTE','SUR','ESTE','OESTE'];
+  var porZona = zonas.map(function(z){ return lista.filter(function(o){return o.zona===z;}).length; });
+  dibujarBarras('chartZona', zonas, [{label:'Solicitudes', data:porZona, backgroundColor:COLORES[0]}]);
+
+  // ---- Gráfico: estado ----
+  var estados = ['PENDIENTE','PROGRAMADO','EN_ESPERA','ENTREGADO','NO ENTREGADO'];
+  var etiquetasEstado = ['Pendiente','Programado','En espera','Entregado','No entregado'];
+  var porEstado = estados.map(function(e){ return lista.filter(function(o){return o.estado===e;}).length; });
+  dibujarDona('chartEstado', etiquetasEstado, porEstado);
+
+  // ---- Gráfico: espera promedio por zona ----
+  var esperaPorZona = zonas.map(function(z){
+    var arr = esperas.filter(function(e){return e.zona===z;});
+    return arr.length ? Math.round(arr.reduce(function(a,b){return a+b.min;},0)/arr.length) : 0;
+  });
+  dibujarBarras('chartEsperaZona', zonas, [{label:'Minutos', data:esperaPorZona, backgroundColor:COLORES[2]}]);
+
+  // ---- Gráfico: envío vs recojo ----
+  var envios = lista.filter(function(o){return o.servicio==='ENVIO';}).length;
+  var recojos = lista.filter(function(o){return o.servicio==='RECOJO';}).length;
+  dibujarDona('chartServicio', ['Envío','Recojo'], [envios, recojos]);
+
+  // ---- Gráfico: tendencia por día ----
+  var porDia = {};
+  lista.forEach(function(o){
+    var f = soloFecha(o.fecha);
+    if (!f) return;
+    var key = f.getFullYear()+'-'+('0'+(f.getMonth()+1)).slice(-2)+'-'+('0'+f.getDate()).slice(-2);
+    porDia[key] = (porDia[key]||0)+1;
+  });
+  var diasOrdenados = Object.keys(porDia).sort();
+  var etiquetasDias = diasOrdenados.map(function(d){ var p=d.split('-'); return p[2]+'/'+p[1]; });
+  dibujarLinea('chartTendencia', etiquetasDias, diasOrdenados.map(function(d){return porDia[d];}));
+
+  // ---- Ranking por chofer ----
+  var choferesActivos = Array.from(new Set(lista.map(function(o){return o.chofer;}).filter(Boolean)));
+  var rankChofer = choferesActivos.map(function(ch){
+    var deCh = lista.filter(function(o){return o.chofer===ch;});
+    var entregasCh = deCh.filter(function(o){return o.estado==='ENTREGADO'||o.estado==='NO ENTREGADO';}).length;
+    var esperasCh = esperas.filter(function(e){return e.chofer===ch;});
+    var espProm = esperasCh.length ? esperasCh.reduce(function(a,b){return a+b.min;},0)/esperasCh.length : null;
+    return {chofer:ch, entregas:entregasCh, espera:espProm};
+  }).sort(function(a,b){return b.entregas-a.entregas;});
+  var maxEntregas = rankChofer.length ? Math.max.apply(null, rankChofer.map(function(x){return x.entregas;})) : 1;
+  document.querySelector('#tablaChoferes tbody').innerHTML = rankChofer.length ? rankChofer.map(function(r){
+    var pct = maxEntregas ? (r.entregas/maxEntregas*100) : 0;
+    return '<tr><td>'+r.chofer+'</td><td>'+r.entregas+'</td><td>'+fmtMin(r.espera)+'</td>'
+      + '<td><div class="barra-mini-cont"><div class="barra-mini" style="width:'+pct+'%"></div></div></td></tr>';
+  }).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--gris)">Sin datos con estos filtros</td></tr>';
+
+  // ---- Ranking por punto ----
+  var conteoPunto = {};
+  lista.forEach(function(o){
+    if (!o.destino) return;
+    var key = o.destino+'||'+o.zona;
+    conteoPunto[key] = (conteoPunto[key]||0)+1;
+  });
+  var rankPunto = Object.keys(conteoPunto).map(function(k){
+    var p = k.split('||'); return {punto:p[0], zona:p[1], n:conteoPunto[k]};
+  }).sort(function(a,b){return b.n-a.n;}).slice(0,12);
+  var maxPunto = rankPunto.length ? rankPunto[0].n : 1;
+  document.querySelector('#tablaPuntos tbody').innerHTML = rankPunto.length ? rankPunto.map(function(r){
+    var pct = maxPunto ? (r.n/maxPunto*100) : 0;
+    return '<tr><td>'+r.punto+'</td><td>'+r.zona+'</td><td>'+r.n+'</td>'
+      + '<td><div class="barra-mini-cont"><div class="barra-mini" style="width:'+pct+'%;background:var(--petroleo)"></div></div></td></tr>';
+  }).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--gris)">Sin datos con estos filtros</td></tr>';
+}
+
+// ---------- Helpers Chart.js ----------
+function destruirSiExiste(id){ if (graficos[id]){ graficos[id].destroy(); delete graficos[id]; } }
+function dibujarBarras(id, labels, datasets){
+  destruirSiExiste(id);
+  var ctx = document.getElementById(id).getContext('2d');
+  graficos[id] = new Chart(ctx, {
+    type:'bar',
+    data:{labels:labels, datasets:datasets.map(function(d){return Object.assign({borderRadius:3},d);})},
+    options:{
+      responsive:true, maintainAspectRatio:true,
+      plugins:{legend:{display:datasets.length>1}},
+      scales:{ x:{grid:{display:false}}, y:{beginAtZero:true, grid:{color:'#F3F4F6'}} }
+    }
+  });
+}
+function dibujarDona(id, labels, data){
+  destruirSiExiste(id);
+  var ctx = document.getElementById(id).getContext('2d');
+  graficos[id] = new Chart(ctx, {
+    type:'doughnut',
+    data:{labels:labels, datasets:[{data:data, backgroundColor:COLORES, borderWidth:2, borderColor:'#fff'}]},
+    options:{responsive:true, maintainAspectRatio:true, plugins:{legend:{position:'bottom'}}}
+  });
+}
+function dibujarLinea(id, labels, data){
+  destruirSiExiste(id);
+  var ctx = document.getElementById(id).getContext('2d');
+  graficos[id] = new Chart(ctx, {
+    type:'line',
+    data:{labels:labels, datasets:[{label:'Solicitudes', data:data, borderColor:COLORES[0], backgroundColor:'rgba(16,185,129,.12)', fill:true, tension:0.3, borderWidth:3, pointRadius:4}]},
+    options:{
+      responsive:true, maintainAspectRatio:true,
+      plugins:{legend:{display:false}},
+      scales:{ x:{grid:{display:false}}, y:{beginAtZero:true, grid:{color:'#F3F4F6'}} }
+    }
+  });
+}
+
+// ---------- Filtros UI ----------
+document.querySelectorAll('.chip').forEach(function(ch){
+  ch.addEventListener('click', function(){
+    var f = this.getAttribute('data-f');
+    document.querySelectorAll('.chip[data-f="'+f+'"]').forEach(function(x){x.classList.remove('activo');});
+    this.classList.add('activo');
+    filtro[f] = this.getAttribute('data-v');
+    aplicarFiltrosYRenderizar();
+  });
+});
+document.getElementById('fChofer').addEventListener('change', function(){ filtro.chofer=this.value; aplicarFiltrosYRenderizar(); });
+document.getElementById('fServicio').addEventListener('change', function(){ filtro.servicio=this.value; aplicarFiltrosYRenderizar(); });
+document.getElementById('fDesde').addEventListener('change', function(){ filtro.desde=this.value; aplicarFiltrosYRenderizar(); });
+document.getElementById('fHasta').addEventListener('change', function(){ filtro.hasta=this.value; aplicarFiltrosYRenderizar(); });
+document.getElementById('btnActualizar').addEventListener('click', cargarSolicitudes);
+
+function mostrarToast(msg, tipo){
+  var t = document.getElementById('toast'); t.textContent=msg; t.className='toast '+tipo;
+  setTimeout(function(){ t.className='toast'; }, 4000);
+}
+
+// ---------- Exportar a Excel (lo filtrado) ----------
+document.getElementById('btnExcel').addEventListener('click', function(){
+  var lista = registros.filter(pasaFiltro);
+  if (!lista.length){ mostrarToast('No hay datos con estos filtros','error'); return; }
+  var filas = lista.map(function(o){
+    return {
+      'ID':o.id, 'Fecha Solicitud':o.fecha, 'Área':o.area, 'Servicio':o.servicio,
+      'Base LIVES':o.origen, 'Tipo':o.tipo, 'Punto':o.destino, 'Distrito':o.distrito,
+      'Zona':o.zona, 'Prioridad':o.prioridad, 'Chofer':o.chofer, 'Fecha Programada':o.fechaprog,
+      'Estado':o.estado, 'Hora Programación':o.hprog, 'Hora Llegada':o.hllegada, 'Hora Entrega':o.hentrega
+    };
+  });
+  var ws = XLSX.utils.json_to_sheet(filas);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Dashboard Movilidades');
+  var hoy = new Date();
+  XLSX.writeFile(wb, 'dashboard_movilidades_'+hoy.getFullYear()+('0'+(hoy.getMonth()+1)).slice(-2)+('0'+hoy.getDate()).slice(-2)+'.xlsx');
+  mostrarToast('Excel exportado','exito');
+});
+
+// ---------- Exportar copia estática dinámica (para lectores, sin conexión al Sheet) ----------
+document.getElementById('btnExportarEstatico').addEventListener('click', function(){
+  if (!registros.length){ mostrarToast('Espera a que carguen los datos primero','error'); return; }
+  var ahora = new Date().toLocaleString('es-PE');
+  var html = document.documentElement.outerHTML;
+  // Reemplaza el marcador de datos embebidos por el dataset actual (congelado)
+  html = html.replace(
+    'var DATOS_EMBEBIDOS = null;',
+    'var DATOS_EMBEBIDOS = ' + JSON.stringify(registros) + ';'
+  );
+  html = html.replace(
+    'var FECHA_EXPORTACION = null;',
+    'var FECHA_EXPORTACION = ' + JSON.stringify(ahora) + ';'
+  );
+  var blob = new Blob([html], {type:'text/html;charset=utf-8'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  var hoy = new Date();
+  a.href = url;
+  a.download = 'dashboard_movilidades_copia_' + hoy.getFullYear()+('0'+(hoy.getMonth()+1)).slice(-2)+('0'+hoy.getDate()).slice(-2) + '.html';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  mostrarToast('Copia estática descargada. Ábrela con doble clic, funciona sin internet ni conexión al Sheet.','exito');
+});
+
+// Init
+iniciar();
+</script>
+</body>
+</html>
