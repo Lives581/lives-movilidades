@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Programación de Movilidades — LIVES</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --petroleo:#0E3B36; --esmeralda:#10B981; --alerta:#DC2626;
@@ -52,9 +53,26 @@
   .b-lock{background:#E5E7EB; color:#374151;}
   .b-envio{background:#0E3B36; color:#fff;}
   .b-recojo{background:#F59E0B; color:#fff;}
+  .b-espera{background:#FEF3C7; color:#92400E;}
   .btn-ubic{display:inline-block; padding:3px 9px; background:#EFF6FF; color:#1E40AF; border:1px solid #BFDBFE; border-radius:6px; font-size:12px; font-weight:600; text-decoration:none;}
   .btn-ubic:hover{background:#DBEAFE;}
+  .btn-ubic.llegada{background:#FFFBEB; color:#92400E; border-color:#FDE68A;}
   .btn-foto-link{display:inline-block; padding:3px 7px; background:#ECFDF5; border:1px solid #A7F3D0; border-radius:6px; text-decoration:none; font-size:13px;}
+  .btn-fila-accion{padding:4px 8px; border:1px solid var(--borde); border-radius:6px; background:#fff; font-size:12px; cursor:pointer; margin-right:3px;}
+  .btn-fila-accion:hover{background:var(--gris-claro);}
+  .btn-fila-accion.revertir{color:var(--alerta); border-color:#FCA5A5;}
+  .btn-excel{padding:8px 14px; background:#fff; color:#065F46; border:1.5px solid var(--esmeralda); border-radius:7px; font-size:13px; font-weight:600; cursor:pointer;}
+
+  .modal-overlay{position:fixed; inset:0; background:rgba(14,59,54,.45); display:none; align-items:center; justify-content:center; z-index:200;}
+  .modal-overlay.visible{display:flex;}
+  .modal-box{background:#fff; border-radius:12px; padding:22px; width:340px; box-shadow:0 8px 30px rgba(0,0,0,.2);}
+  .modal-box h3{color:var(--petroleo); font-size:16px; margin-bottom:14px;}
+  .modal-box label{display:block; font-size:12px; font-weight:600; color:var(--gris); margin:10px 0 5px;}
+  .modal-box select, .modal-box input[type=date]{width:100%; padding:9px; border:1px solid var(--borde); border-radius:7px; font-size:14px;}
+  .modal-acciones{display:flex; gap:8px; margin-top:16px;}
+  .modal-acciones button{flex:1; padding:10px; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer;}
+  .modal-guardar{background:var(--esmeralda); color:#fff;}
+  .modal-cancelar{background:#fff; color:var(--gris); border:1px solid var(--borde) !important;}
   .id-col{font-weight:700; color:var(--petroleo); white-space:nowrap;}
   .fh{font-size:12px; color:var(--gris); white-space:nowrap;}
   .destino-col{font-weight:600;}
@@ -98,6 +116,7 @@
     <select id="filtroEstado">
       <option value="PENDIENTE">Pendientes</option>
       <option value="PROGRAMADO">Programados</option>
+      <option value="EN_ESPERA">En espera</option>
       <option value="TODOS">Todos</option>
     </select>
   </div>
@@ -105,6 +124,7 @@
     <label>Buscar:</label>
     <input type="text" id="buscar" placeholder="Destino, área, ID...">
   </div>
+  <button class="btn-excel" id="btnExcel">📊 Exportar Excel</button>
   <button class="btn-refresh" id="btnRefresh">Actualizar</button>
 </div>
 
@@ -129,15 +149,31 @@
         <th>Estado</th>
         <th>Chofer</th>
         <th>H. Programación</th>
+        <th>H. Llegada</th>
         <th>H. Entrega</th>
         <th>Ubicación / Foto</th>
+        <th>Acciones</th>
         <th>Comentarios</th>
       </tr>
     </thead>
     <tbody id="cuerpo">
-      <tr><td colspan="17" class="cargando">Cargando solicitudes...</td></tr>
+      <tr><td colspan="18" class="cargando">Cargando solicitudes...</td></tr>
     </tbody>
   </table>
+</div>
+
+<div class="modal-overlay" id="modalEditar">
+  <div class="modal-box">
+    <h3>Editar programación</h3>
+    <label>Chofer</label>
+    <select id="modalChofer"><option value="">— Elegir chofer —</option></select>
+    <label>Fecha programada</label>
+    <input type="date" id="modalFecha">
+    <div class="modal-acciones">
+      <button class="modal-cancelar" id="modalCancelar">Cancelar</button>
+      <button class="modal-guardar" id="modalGuardar">Guardar cambios</button>
+    </div>
+  </div>
 </div>
 
 <div class="accion-bar" id="accionBar">
@@ -197,11 +233,11 @@ window.procesarChoferes = procesarChoferes;
 
 // ---------- Cargar SOLICITUDES ----------
 function cargarSolicitudes(){
-  document.getElementById('cuerpo').innerHTML = '<tr><td colspan="14" class="cargando">Cargando solicitudes...</td></tr>';
+  document.getElementById('cuerpo').innerHTML = '<tr><td colspan="18" class="cargando">Cargando solicitudes...</td></tr>';
   var s = document.createElement('script');
   s.src = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
           '/gviz/tq?sheet=SOLICITUDES&tqx=out:json;responseHandler:procesarSolicitudes&_=' + Date.now();
-  s.onerror = function(){ document.getElementById('cuerpo').innerHTML='<tr><td colspan="14" class="vacio">Error al cargar. Revisa tu conexión.</td></tr>'; };
+  s.onerror = function(){ document.getElementById('cuerpo').innerHTML='<tr><td colspan="18" class="vacio">Error al cargar. Revisa tu conexión.</td></tr>'; };
   document.body.appendChild(s);
 }
 function val(c){ return c && (c.f !== undefined && c.f !== null ? c.f : c.v) != null ? (c.f !== undefined && c.f !== null ? c.f : c.v) : ''; }
@@ -233,13 +269,15 @@ function procesarSolicitudes(json){
         hprog:     String(val(c[17])||'').trim(),
         ubicacion: String(val(c[18])||'').trim(),
         foto:      String(val(c[19])||'').trim(),
-        servicio:  String(val(c[20])||'ENVIO').trim().toUpperCase()
+        servicio:  String(val(c[20])||'ENVIO').trim().toUpperCase(),
+        hllegada:  String(val(c[21])||'').trim(),
+        ubicacionllegada: String(val(c[22])||'').trim()
       };
       if (!o.id) return;
       if (o.id.toUpperCase() === 'ID') return; // descartar fila de encabezado
       o.num = (function(){ var m=o.id.match(/MOV-(\d+)/); return m?parseInt(m[1],10):9999; })();
       solicitudes.push(o);
-      if (o.estado === 'PROGRAMADO') puntosBloqueados[o.destino.toUpperCase()] = true;
+      if (o.estado === 'PROGRAMADO' || o.estado === 'EN_ESPERA') puntosBloqueados[o.destino.toUpperCase()] = true;
     });
   }catch(e){}
   render();
@@ -271,6 +309,7 @@ function pasaFiltros(o){
 function badgeEstado(e){
   if (e==='PENDIENTE') return '<span class="badge b-pend">PENDIENTE</span>';
   if (e==='PROGRAMADO') return '<span class="badge b-prog">PROGRAMADO</span>';
+  if (e==='EN_ESPERA') return '<span class="badge b-espera">⏳ EN ESPERA</span>';
   if (e==='ENTREGADO') return '<span class="badge b-entr">ENTREGADO</span>';
   if (e==='NO ENTREGADO') return '<span class="badge b-noentr">NO ENTREGADO</span>';
   return '<span class="badge b-pend">'+e+'</span>';
@@ -280,7 +319,7 @@ function render(){
   var lista = ordenar(solicitudes.filter(pasaFiltros));
   var cuerpo = document.getElementById('cuerpo');
   if (!lista.length){
-    cuerpo.innerHTML = '<tr><td colspan="17" class="vacio">No hay solicitudes con estos filtros.</td></tr>';
+    cuerpo.innerHTML = '<tr><td colspan="18" class="vacio">No hay solicitudes con estos filtros.</td></tr>';
     actualizarResumen(); actualizarBarra(); return;
   }
   var html = '';
@@ -300,9 +339,15 @@ function render(){
         ? '<span style="font-size:11px;color:#9CA3AF">→ '+o.origen+'</span>'
         : '<span style="font-size:11px;color:#9CA3AF">'+o.origen+' →</span>';
     var ubicHtml = '';
-    if (o.ubicacion) ubicHtml += '<a href="'+o.ubicacion+'" target="_blank" class="btn-ubic" title="Ver ubicación en el mapa">📍 Mapa</a> ';
+    if (o.ubicacionllegada) ubicHtml += '<a href="'+o.ubicacionllegada+'" target="_blank" class="btn-ubic llegada" title="Ubicación de llegada">📍L</a> ';
+    if (o.ubicacion) ubicHtml += '<a href="'+o.ubicacion+'" target="_blank" class="btn-ubic" title="Ubicación de entrega/cierre">📍E</a> ';
     if (o.foto) ubicHtml += '<a href="'+o.foto+'" target="_blank" class="btn-foto-link" title="Ver foto">📷</a>';
     if (!ubicHtml) ubicHtml = '<span style="color:#D1D5DB">—</span>';
+    var editable = (o.estado==='PROGRAMADO' || o.estado==='EN_ESPERA');
+    var accionesFila = editable
+        ? ('<button class="btn-fila-accion" onclick="abrirEditar(\''+o.id+'\')" title="Cambiar chofer o fecha">✏️ Editar</button>'
+          + '<button class="btn-fila-accion revertir" onclick="revertirSolicitud(\''+o.id+'\')" title="Deshacer y volver a pendiente">↩️ Revertir</button>')
+        : '<span style="color:#D1D5DB">—</span>';
     html += '<tr class="'+clases.join(' ')+'" data-id="'+o.id+'" data-zona="'+o.zona+'">'
       + '<td>'+(checkable
           ? '<input type="checkbox" class="chk chk-fila" data-id="'+o.id+'" '+(seleccion[o.id]?'checked':'')+'>'
@@ -321,8 +366,10 @@ function render(){
       + '<td>'+badgeEstado(o.estado)+(o.motivo?'<br><span style="font-size:11px;color:#991B1B">'+o.motivo+'</span>':'')+'</td>'
       + '<td>'+(o.chofer||'—')+'</td>'
       + '<td class="fh">'+(o.hprog||'—')+'</td>'
+      + '<td class="fh">'+(o.hllegada||'—')+'</td>'
       + '<td class="fh">'+(o.hentrega||'—')+'</td>'
       + '<td style="white-space:nowrap">'+ubicHtml+'</td>'
+      + '<td style="white-space:nowrap">'+accionesFila+'</td>'
       + '<td style="max-width:180px;font-size:12px;color:#6B7280">'+o.comentarios+'</td>'
       + '</tr>';
   });
@@ -342,8 +389,9 @@ function actualizarResumen(){
   var pend = solicitudes.filter(function(o){return o.estado==='PENDIENTE';}).length;
   var urg = solicitudes.filter(function(o){return o.estado==='PENDIENTE'&&o.prioridad==='SI';}).length;
   var prog = solicitudes.filter(function(o){return o.estado==='PROGRAMADO';}).length;
+  var espera = solicitudes.filter(function(o){return o.estado==='EN_ESPERA';}).length;
   document.getElementById('resumen').innerHTML =
-    '<b>'+pend+'</b> pendientes · <b style="color:var(--alerta)">'+urg+'</b> urgentes sin programar · <b>'+prog+'</b> programadas en curso';
+    '<b>'+pend+'</b> pendientes · <b style="color:var(--alerta)">'+urg+'</b> urgentes sin programar · <b>'+prog+'</b> programadas en curso · <b style="color:#92400E">'+espera+'</b> en espera en el punto';
 }
 
 function actualizarBarra(){
@@ -401,6 +449,96 @@ function mostrarToast(msg, tipo){
   t.textContent = msg; t.className = 'toast '+tipo;
   setTimeout(function(){ t.className='toast'; }, 4500);
 }
+
+// ---------- Editar programación (Sara corrige un error) ----------
+var idEnEdicion = '';
+function abrirEditar(id){
+  idEnEdicion = id;
+  var o = solicitudes.find(function(x){return x.id===id;});
+  if (!o) return;
+  var sel = document.getElementById('modalChofer');
+  sel.innerHTML = '<option value="">— Elegir chofer —</option>';
+  choferes.forEach(function(ch){
+    var op = document.createElement('option'); op.value=ch; op.textContent=ch;
+    if (ch===o.chofer) op.selected=true;
+    sel.appendChild(op);
+  });
+  document.getElementById('modalFecha').value = o.fechaprog ? convertirAFechaISO(o.fechaprog) : '';
+  document.getElementById('modalEditar').classList.add('visible');
+}
+function convertirAFechaISO(v){
+  // Acepta 'yyyy-mm-dd' tal cual, o intenta parsear dd/mm/yyyy
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  var m = String(v).match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if (m) return m[3]+'-'+m[2]+'-'+m[1];
+  return '';
+}
+document.getElementById('modalCancelar').addEventListener('click', function(){
+  document.getElementById('modalEditar').classList.remove('visible');
+});
+document.getElementById('modalGuardar').addEventListener('click', function(){
+  var chofer = document.getElementById('modalChofer').value;
+  var fecha = document.getElementById('modalFecha').value;
+  if (!chofer && !fecha){ mostrarToast('No hay cambios que guardar','error'); return; }
+  var btn = this; btn.disabled=true; btn.textContent='Guardando...';
+  var params = { accion:'editarprogramacion', id:idEnEdicion, chofer:chofer||'', fechaprog:fecha||'', callback:'respEditar' };
+  var qs = Object.keys(params).map(function(k){return encodeURIComponent(k)+'='+encodeURIComponent(params[k]);}).join('&');
+  var s = document.createElement('script');
+  s.src = URL_APPS_SCRIPT + '?' + qs;
+  s.onerror = function(){ btn.disabled=false; btn.textContent='Guardar cambios'; mostrarToast('Error de conexión','error'); };
+  document.body.appendChild(s);
+});
+window.respEditar = function(r){
+  var btn = document.getElementById('modalGuardar');
+  btn.disabled=false; btn.textContent='Guardar cambios';
+  if (r && r.ok){
+    mostrarToast(r.msg||'Actualizado','exito');
+    document.getElementById('modalEditar').classList.remove('visible');
+    setTimeout(cargarSolicitudes, 500);
+  } else {
+    mostrarToast((r&&r.msg)?r.msg:'Error al actualizar','error');
+  }
+};
+
+// ---------- Revertir a pendiente ----------
+function revertirSolicitud(id){
+  if (!confirm('¿Revertir '+id+' a PENDIENTE? Se quitará el chofer y la fecha asignada.')) return;
+  var params = { accion:'revertir', id:id, callback:'respRevertir' };
+  var qs = Object.keys(params).map(function(k){return encodeURIComponent(k)+'='+encodeURIComponent(params[k]);}).join('&');
+  var s = document.createElement('script');
+  s.src = URL_APPS_SCRIPT + '?' + qs;
+  s.onerror = function(){ mostrarToast('Error de conexión','error'); };
+  document.body.appendChild(s);
+}
+window.respRevertir = function(r){
+  if (r && r.ok){ mostrarToast(r.msg||'Revertido a pendiente','exito'); setTimeout(cargarSolicitudes, 500); }
+  else { mostrarToast((r&&r.msg)?r.msg:'Error al revertir','error'); }
+};
+
+// ---------- Exportar a Excel (lo que está filtrado en pantalla) ----------
+document.getElementById('btnExcel').addEventListener('click', function(){
+  var lista = ordenar(solicitudes.filter(pasaFiltros));
+  if (!lista.length){ mostrarToast('No hay datos para exportar con estos filtros','error'); return; }
+  var filas = lista.map(function(o){
+    return {
+      'ID': o.id, 'Fecha/Hora Solicitud': o.fecha, 'Servicio': o.servicio,
+      'Prioridad': o.prioridad==='SI'?'URGENTE':'Normal', 'Área': o.area,
+      'Base LIVES': o.origen, 'Tipo': o.tipo,
+      'Cantidad/Peso': o.tipo==='CARGA'?(o.peso+' kg'):(o.cantidad+' und'),
+      'Punto': o.destino, 'Distrito': o.distrito, 'Zona': o.zona,
+      'Estado': o.estado, 'Chofer': o.chofer, 'Fecha Programada': o.fechaprog,
+      'Hora Programación': o.hprog, 'Hora Llegada': o.hllegada, 'Hora Entrega': o.hentrega,
+      'Motivo No Entrega': o.motivo, 'Comentarios': o.comentarios
+    };
+  });
+  var ws = XLSX.utils.json_to_sheet(filas);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Movilidades');
+  var hoy = new Date();
+  var nombre = 'movilidades_' + hoy.getFullYear() + ('0'+(hoy.getMonth()+1)).slice(-2) + ('0'+hoy.getDate()).slice(-2) + '.xlsx';
+  XLSX.writeFile(wb, nombre);
+  mostrarToast('Excel exportado: '+filas.length+' fila(s)', 'exito');
+});
 
 // ---------- Filtros ----------
 document.querySelectorAll('.btn-zona').forEach(function(b){
