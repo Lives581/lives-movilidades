@@ -105,22 +105,21 @@ var fotos = {}; // id -> dataURL
 
 function valC(c){ return c ? (c.f!=null?c.f:(c.v!=null?c.v:'')) : ''; }
 
-// ---------- Cargar choferes ----------
+// ---------- Cargar choferes (Apps Script: inmune a filtros visuales del Sheet) ----------
 function cargarChoferes(){
   var s = document.createElement('script');
-  s.src = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-          '/gviz/tq?sheet=CHOFERES&tqx=out:json;responseHandler:procesarChoferes&_=' + Date.now();
+  s.src = URL_APPS_SCRIPT + '?accion=listarchoferes&callback=procesarChoferes';
   document.body.appendChild(s);
 }
 function procesarChoferes(json){
   var sel = document.getElementById('selChofer');
   sel.innerHTML = '<option value="">— Selecciona tu nombre —</option>';
   try{
-    json.table.rows.forEach(function(r){
-      var c = r.c;
-      var nombre = String(valC(c[0])||'').trim();
-      var activo = String(valC(c[3])||'SI').trim().toUpperCase();
-      if(nombre && nombre.toUpperCase()!=='CHOFER' && activo!=='NO'){
+    var filas = (json && json.filas) ? json.filas : [];
+    filas.forEach(function(row){
+      var nombre = String(row[0]||'').trim();
+      var activo = String(row[3]||'SI').trim().toUpperCase();
+      if(nombre && activo!=='NO'){
         var op=document.createElement('option'); op.value=nombre; op.textContent=nombre; sel.appendChild(op);
       }
     });
@@ -143,12 +142,11 @@ document.getElementById('btnRefrescar').addEventListener('click', function(){
   if(choferActual) cargarRuta(); else mostrarToast('Selecciona tu nombre primero','error');
 });
 
-// ---------- Cargar ruta del chofer ----------
+// ---------- Cargar ruta del chofer (Apps Script: inmune a filtros visuales del Sheet) ----------
 function cargarRuta(){
   document.getElementById('lista').innerHTML='<div class="vacio">Cargando tu ruta...</div>';
   var s = document.createElement('script');
-  s.src = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-          '/gviz/tq?sheet=SOLICITUDES&tqx=out:json;responseHandler:procesarRuta&_=' + Date.now();
+  s.src = URL_APPS_SCRIPT + '?accion=listarsolicitudes&callback=procesarRuta';
   s.onerror = function(){ document.getElementById('lista').innerHTML='<div class="vacio">Error de conexión.</div>'; };
   document.body.appendChild(s);
 }
@@ -158,23 +156,22 @@ function procesarRuta(json){
   solicitudes = [];
   var chN = normalizar(choferActual);
   try{
-    json.table.rows.forEach(function(r){
-      var c = r.c;
-      var idFila = String(valC(c[0])||'').trim();
-      if(idFila.toUpperCase()==='ID') return; // descartar fila de encabezado
-      var chofer = normalizar(valC(c[12]));
-      var estado = String(valC(c[14])||'').toUpperCase();
+    var todas = (json && json.filas) ? json.filas : [];
+    todas.forEach(function(row){
+      var chofer = normalizar(row[12]);
+      var estado = String(row[14]||'').toUpperCase();
       if(chofer !== chN) return;
       if(estado !== 'PROGRAMADO' && estado !== 'EN_ESPERA') return; // solo lo activo del chofer
       solicitudes.push({
-        id:String(valC(c[0])||''), tipo:String(valC(c[4])||''),
-        cantidad:String(valC(c[5])||''), peso:String(valC(c[6])||''),
-        destino:String(valC(c[7])||''), distrito:String(valC(c[8])||''),
-        zona:String(valC(c[9])||'').toUpperCase(), prioridad:String(valC(c[10])||'').toUpperCase(),
-        comentarios:String(valC(c[11])||''), fechaprog:String(valC(c[13])||''), area:String(valC(c[2])||''),
-        origen:String(valC(c[3])||''), servicio:String(valC(c[20])||'ENVIO').toUpperCase(),
+        id:String(row[0]||''), tipo:String(row[4]||''),
+        cantidad:String(row[5]||''), peso:String(row[6]||''),
+        destino:String(row[7]||''), distrito:String(row[8]||''),
+        zona:String(row[9]||'').toUpperCase(), prioridad:String(row[10]||'').toUpperCase(),
+        comentarios:String(row[11]||''), fechaprog:String(row[13]||''), area:String(row[2]||''),
+        origen:String(row[3]||''), servicio:String(row[20]||'ENVIO').toUpperCase(),
+        fechanecesidad:String(row[23]||''),
         estado:estado,
-        num:(function(){var m=String(valC(c[0])).match(/MOV-(\d+)/);return m?parseInt(m[1],10):0;})()
+        num:(function(){var m=String(row[0]||'').match(/MOV-(\d+)/);return m?parseInt(m[1],10):0;})()
       });
     });
   }catch(e){}
@@ -222,7 +219,7 @@ function render(){
       + '<div class="top"><span class="id">'+o.id+'</span>'
       +   '<span>'+badgeServ+' '+(o.prioridad==='SI'?'<span class="badge-urg">URGENTE</span> ':'')+'<span class="badge-zona">'+o.zona+'</span></span></div>'
       + lineaAccion
-      + '<div class="datos"><b>Tipo:</b> '+o.tipo+' · <b>'+cantPeso+'</b><br><b>Área:</b> '+o.area+'</div>'
+      + '<div class="datos"><b>Tipo:</b> '+o.tipo+' · <b>'+cantPeso+'</b><br><b>Área:</b> '+o.area+(o.fechanecesidad?'<br><b>Se necesita para:</b> '+o.fechanecesidad:'')+'</div>'
       + (o.comentarios? '<div class="coment">📝 '+o.comentarios+'</div>':'')
       + bloqueEspera
       + accionesHtml
