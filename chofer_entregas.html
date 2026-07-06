@@ -181,9 +181,9 @@ function procesarRuta(json){
   solicitudes.sort(function(a,b){
     var ea=a.estado==='EN_ESPERA'?0:1, eb=b.estado==='EN_ESPERA'?0:1;
     if(ea!==eb) return ea-eb;
-    if(a.zona!==b.zona) return a.zona<b.zona?-1:1;
     var ua=a.prioridad==='SI'?0:1, ub=b.prioridad==='SI'?0:1;
     if(ua!==ub) return ua-ub;
+    if(a.zona!==b.zona) return a.zona<b.zona?-1:1;
     return a.num-b.num;
   });
   render();
