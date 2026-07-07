@@ -33,6 +33,8 @@
   .card .badge-serv{font-size:11px; font-weight:800; padding:3px 9px; border-radius:12px;}
   .card .badge-serv.envio{background:var(--petroleo); color:#fff;}
   .card .badge-serv.recojo{background:var(--monetario); color:#fff;}
+  .card .badge-serv.traslado{background:#6D28D9; color:#fff;}
+  .card .accion-linea.traslado{color:#6D28D9;}
   .card .accion-linea{font-size:12px; font-weight:800; letter-spacing:.5px; margin-bottom:2px;}
   .card .accion-linea.envio{color:var(--esmeralda);}
   .card .accion-linea.recojo{color:var(--monetario);}
@@ -195,13 +197,19 @@ function render(){
   solicitudes.forEach(function(o){
     var cantPeso = o.tipo.toUpperCase()==='CARGA' ? (o.peso? o.peso+' kg':'—') : (o.cantidad? o.cantidad+' und':'—');
     var esRecojo = o.servicio==='RECOJO';
+    var esTraslado = o.servicio==='TRASLADO';
     var enEspera = o.estado==='EN_ESPERA';
-    var badgeServ = esRecojo ? '<span class="badge-serv recojo">RECOJO</span>' : '<span class="badge-serv envio">ENVÍO</span>';
-    var lineaAccion = esRecojo
+    var badgeServ = esTraslado
+        ? '<span class="badge-serv traslado">TRASLADO</span>'
+        : esRecojo ? '<span class="badge-serv recojo">RECOJO</span>' : '<span class="badge-serv envio">ENVÍO</span>';
+    var lineaAccion = esTraslado
+        ? '<div class="accion-linea traslado">🔄 TRASLADO — dos puntos, sin pasar por LIVES:</div><div class="destino">'+o.origen+' → '+o.destino+'</div><div class="distrito">'+o.distrito+'</div>'
+        : esRecojo
         ? '<div class="accion-linea recojo">📥 RECOGER EN:</div><div class="destino">'+o.destino+'</div><div class="distrito">'+o.distrito+' · luego llevar a <b>'+o.origen+'</b></div>'
         : '<div class="accion-linea envio">📤 ENTREGAR EN:</div><div class="destino">'+o.destino+'</div><div class="distrito">'+o.distrito+'</div>';
-    var txtBtnOk = esRecojo ? '✓ Recogido' : '✓ Entregado';
-    var bloqueEspera = enEspera ? '<div class="badge-espera">⏳ Ya llegaste · en espera de '+(esRecojo?'recojo':'entrega')+'</div>' : '';
+    var txtBtnOk = esTraslado ? '✓ Traslado hecho' : (esRecojo ? '✓ Recogido' : '✓ Entregado');
+    var textoEspera = esTraslado ? 'cerrar el traslado' : (esRecojo ? 'recojo' : 'entrega');
+    var bloqueEspera = enEspera ? '<div class="badge-espera">⏳ Ya llegaste · en espera de '+textoEspera+'</div>' : '';
     var accionesHtml = enEspera
         ? ('<div class="acciones">'
           +   '<button class="btn-entregado" onclick="marcarEntregado(\''+o.id+'\')">'+txtBtnOk+'</button>'
