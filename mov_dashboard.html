@@ -93,6 +93,7 @@
       <option value="">Todos</option>
       <option value="ENVIO">Envío</option>
       <option value="RECOJO">Recojo</option>
+      <option value="TRASLADO">Traslado</option>
     </select>
   </div>
   <div class="grupo">
@@ -133,7 +134,7 @@
         <canvas id="chartEsperaZona"></canvas>
       </div>
       <div class="panel">
-        <h3>Envío vs Recojo</h3>
+        <h3>Envío vs Recojo vs Traslado</h3>
         <canvas id="chartServicio"></canvas>
       </div>
     </div>
@@ -307,6 +308,7 @@ function aplicarFiltrosYRenderizar(){
   var espera = lista.filter(function(o){return o.estado==='EN_ESPERA';}).length;
   var entr = lista.filter(function(o){return o.estado==='ENTREGADO';}).length;
   var noentr = lista.filter(function(o){return o.estado==='NO ENTREGADO';}).length;
+  var cancel = lista.filter(function(o){return o.estado==='CANCELADO';}).length;
   var urgentesPend = lista.filter(function(o){return o.prioridad==='SI' && (o.estado==='PENDIENTE'||o.estado==='PROGRAMADO');}).length;
 
   // Tiempo de espera en punto: hllegada -> hentrega, solo cerradas con ambos timestamps
@@ -334,7 +336,7 @@ function aplicarFiltrosYRenderizar(){
   }
   var hoy0 = new Date(); hoy0.setHours(0,0,0,0);
   var vencidas = lista.filter(function(o){
-    if (o.estado==='ENTREGADO' || o.estado==='NO ENTREGADO') return false;
+    if (o.estado==='ENTREGADO' || o.estado==='NO ENTREGADO' || o.estado==='CANCELADO') return false;
     var f = parseFechaFlexible(o.fechanecesidad);
     return f && f < hoy0;
   }).length;
@@ -348,6 +350,7 @@ function aplicarFiltrosYRenderizar(){
     {label:'En espera en punto', valor: fmtInt(espera)},
     {label:'Entregadas', valor: fmtInt(entr)},
     {label:'No entregadas', valor: fmtInt(noentr), alerta: noentr>0},
+    {label:'Canceladas', valor: fmtInt(cancel)},
     {label:'Tasa no entrega', valor: cerradas? tasaNoEntrega.toFixed(1)+'%':'—', alerta: tasaNoEntrega>10},
     {label:'Espera prom. en punto', valor: fmtMin(esperaProm)}
   ];
@@ -364,8 +367,8 @@ function aplicarFiltrosYRenderizar(){
   dibujarBarras('chartZona', zonas, [{label:'Solicitudes', data:porZona, backgroundColor:COLORES[0]}]);
 
   // ---- Gráfico: estado ----
-  var estados = ['PENDIENTE','PROGRAMADO','EN_ESPERA','ENTREGADO','NO ENTREGADO'];
-  var etiquetasEstado = ['Pendiente','Programado','En espera','Entregado','No entregado'];
+  var estados = ['PENDIENTE','PROGRAMADO','EN_ESPERA','ENTREGADO','NO ENTREGADO','CANCELADO'];
+  var etiquetasEstado = ['Pendiente','Programado','En espera','Entregado','No entregado','Cancelado'];
   var porEstado = estados.map(function(e){ return lista.filter(function(o){return o.estado===e;}).length; });
   dibujarDona('chartEstado', etiquetasEstado, porEstado);
 
@@ -376,10 +379,11 @@ function aplicarFiltrosYRenderizar(){
   });
   dibujarBarras('chartEsperaZona', zonas, [{label:'Minutos', data:esperaPorZona, backgroundColor:COLORES[2]}]);
 
-  // ---- Gráfico: envío vs recojo ----
+  // ---- Gráfico: envío vs recojo vs traslado ----
   var envios = lista.filter(function(o){return o.servicio==='ENVIO';}).length;
   var recojos = lista.filter(function(o){return o.servicio==='RECOJO';}).length;
-  dibujarDona('chartServicio', ['Envío','Recojo'], [envios, recojos]);
+  var traslados = lista.filter(function(o){return o.servicio==='TRASLADO';}).length;
+  dibujarDona('chartServicio', ['Envío','Recojo','Traslado'], [envios, recojos, traslados]);
 
   // ---- Gráfico: tendencia por día ----
   var porDia = {};
