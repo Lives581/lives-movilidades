@@ -90,12 +90,18 @@
     <div class="fila-chips" id="chipsServicio">
       <div class="chip activo" data-valor="ENVIO">📤 Envío</div>
       <div class="chip" data-valor="RECOJO">📥 Recojo</div>
+      <div class="chip" data-valor="TRASLADO">🔄 Traslado</div>
+    </div>
+    <div class="sub" id="subTraslado" style="display:none;margin:-8px 0 12px;font-size:12px;color:var(--gris)">
+      Traslado entre talleres o servicios externos — no involucra Barranco ni Chorrillos.
     </div>
 
-    <label id="labelBase">Origen — base LIVES</label>
-    <div class="fila-chips" id="chipsOrigen">
-      <div class="chip" data-valor="BARRANCO">Barranco</div>
-      <div class="chip" data-valor="CHORRILLOS">Chorrillos</div>
+    <div id="bloqueBaseLives">
+      <label id="labelBase">Origen — base LIVES</label>
+      <div class="fila-chips" id="chipsOrigen">
+        <div class="chip" data-valor="BARRANCO">Barranco</div>
+        <div class="chip" data-valor="CHORRILLOS">Chorrillos</div>
+      </div>
     </div>
 
     <label>Tipo de envío</label>
@@ -114,11 +120,29 @@
       <input type="number" id="cantidad" min="1" step="1" placeholder="Ej.: 3">
     </div>
 
-    <label id="labelDestino">Destino (a dónde se envía)</label>
-    <select id="destino"><option value="">Cargando puntos...</option></select>
-    <div class="info-destino" id="infoDestino">
-      <span class="etiqueta" id="etqDistrito"></span>
-      <span class="etiqueta zona" id="etqZona"></span>
+    <div id="bloqueDestinoNormal">
+      <label id="labelDestino">Destino (a dónde se envía)</label>
+      <select id="destino"><option value="">Cargando puntos...</option></select>
+      <div class="info-destino" id="infoDestino">
+        <span class="etiqueta" id="etqDistrito"></span>
+        <span class="etiqueta zona" id="etqZona"></span>
+      </div>
+    </div>
+
+    <div id="bloqueTraslado" style="display:none">
+      <label>Punto de origen del traslado</label>
+      <select id="trasladoOrigen"><option value="">Cargando puntos...</option></select>
+      <div class="info-destino" id="infoTrasladoOrigen">
+        <span class="etiqueta" id="etqDistritoTO"></span>
+        <span class="etiqueta zona" id="etqZonaTO"></span>
+      </div>
+
+      <label>Punto de destino del traslado</label>
+      <select id="trasladoDestino"><option value="">Cargando puntos...</option></select>
+      <div class="info-destino" id="infoTrasladoDestino">
+        <span class="etiqueta" id="etqDistritoTD"></span>
+        <span class="etiqueta zona" id="etqZonaTD"></span>
+      </div>
     </div>
 
     <label>Prioridad</label>
@@ -234,6 +258,21 @@ function procesarDirectorio(json){
       op.value = i; op.textContent = d.nombre;
       sd.appendChild(op);
     });
+
+    // Puntos válidos para TRASLADO: solo externos, nunca Barranco/Chorrillos-LIVES
+    var puntosExternos = directorio.filter(function(d){
+      return d.nombre.toUpperCase().indexOf('LIVES') < 0;
+    });
+    ['trasladoOrigen','trasladoDestino'].forEach(function(idSel){
+      var s2 = document.getElementById(idSel);
+      s2.innerHTML = '<option value="">— Selecciona el punto —</option>';
+      puntosExternos.forEach(function(d){
+        var idx = directorio.indexOf(d);
+        var op = document.createElement('option');
+        op.value = idx; op.textContent = d.nombre;
+        s2.appendChild(op);
+      });
+    });
   }catch(e){
     selDestino().innerHTML = '<option value="">Error al procesar destinos</option>';
   }
@@ -242,6 +281,20 @@ function selDestino(){ return document.getElementById('destino'); }
 
 // Apps Script usa el mismo patrón JSONP: responseHandler como función global
 window.procesarDirectorio = procesarDirectorio;
+
+// --- Mostrar distrito y zona al elegir el punto de traslado (origen/destino) ---
+function wireInfoTraslado(idSelect, idEtqDistrito, idEtqZona, idCont){
+  document.getElementById(idSelect).addEventListener('change', function(){
+    var info = document.getElementById(idCont);
+    if (this.value === ''){ info.classList.remove('visible'); return; }
+    var d = directorio[parseInt(this.value,10)];
+    document.getElementById(idEtqDistrito).textContent = d.distrito || 'Sin distrito';
+    document.getElementById(idEtqZona).textContent = d.zona || 'Sin zona';
+    info.classList.add('visible');
+  });
+}
+wireInfoTraslado('trasladoOrigen','etqDistritoTO','etqZonaTO','infoTrasladoOrigen');
+wireInfoTraslado('trasladoDestino','etqDistritoTD','etqZonaTD','infoTrasladoDestino');
 
 // --- Mostrar distrito y zona al elegir destino ---
 selDestino().addEventListener('change', function(){
@@ -274,6 +327,11 @@ activarChips('chipsTipo','tipo', function(v){
 activarChips('chipsServicio','servicio', function(v){
   var lblBase = document.getElementById('labelBase');
   var lblDest = document.getElementById('labelDestino');
+  var esTraslado = (v === 'TRASLADO');
+  document.getElementById('subTraslado').style.display = esTraslado ? 'block' : 'none';
+  document.getElementById('bloqueBaseLives').style.display = esTraslado ? 'none' : 'block';
+  document.getElementById('bloqueDestinoNormal').style.display = esTraslado ? 'none' : 'block';
+  document.getElementById('bloqueTraslado').style.display = esTraslado ? 'block' : 'none';
   if (v === 'RECOJO'){
     lblBase.textContent = 'Llevar a — base LIVES';
     lblDest.textContent = 'Recoger en (de dónde)';
@@ -296,14 +354,29 @@ document.getElementById('btnEnviar').addEventListener('click', function(){
   msg.className = 'mensaje';
 
   var area = inputArea.value.trim();
-  var destinoIdx = selDestino().value;
+  var esTraslado = (sel.servicio === 'TRASLADO');
   var errores = [];
   if (!area) errores.push('el área solicitante');
-  if (!sel.origen) errores.push('el origen');
+  if (!sel.servicio) errores.push('el tipo de servicio');
   if (!sel.tipo) errores.push('el tipo de envío');
   if (sel.tipo==='CARGA' && !document.getElementById('peso').value) errores.push('el peso aproximado');
   if ((sel.tipo==='PAQUETE'||sel.tipo==='SOBRE') && !document.getElementById('cantidad').value) errores.push('la cantidad');
-  if (destinoIdx==='') errores.push('el destino');
+
+  var origenPunto, destinoPunto, destinoIdx;
+  if (esTraslado){
+    var idxTO = document.getElementById('trasladoOrigen').value;
+    var idxTD = document.getElementById('trasladoDestino').value;
+    if (idxTO==='') errores.push('el punto de origen del traslado');
+    if (idxTD==='') errores.push('el punto de destino del traslado');
+    if (idxTO!=='' && idxTD!=='' && idxTO===idxTD) errores.push('el origen y destino del traslado no pueden ser el mismo punto');
+    if (idxTO!=='') origenPunto = directorio[parseInt(idxTO,10)];
+    if (idxTD!=='') destinoPunto = directorio[parseInt(idxTD,10)];
+  } else {
+    if (!sel.origen) errores.push('el origen');
+    destinoIdx = selDestino().value;
+    if (destinoIdx==='') errores.push('el destino');
+  }
+
   if (errores.length){
     msg.className = 'mensaje error';
     msg.textContent = 'Falta completar: ' + errores.join(', ') + '.';
@@ -317,20 +390,34 @@ document.getElementById('btnEnviar').addEventListener('click', function(){
 
   try{ localStorage.setItem('lives_area_solicitante', area); }catch(e){}
 
-  var d = directorio[parseInt(destinoIdx,10)];
   var btn = document.getElementById('btnEnviar');
   btn.disabled = true; btn.textContent = 'Guardando...';
 
-  var params = {
-    accion:'nueva', area:area, origen:sel.origen, tipo:sel.tipo, servicio:sel.servicio,
-    peso: document.getElementById('peso').value || '',
-    cantidad: document.getElementById('cantidad').value || '',
-    destino:d.nombre, distrito:d.distrito, zona:d.zona,
-    prioridad:sel.prioridad,
-    fechanecesidad: document.getElementById('fechaNecesidad').value || '',
-    comentarios: document.getElementById('comentarios').value.trim(),
-    callback:'respuestaGuardar'
-  };
+  var params;
+  if (esTraslado){
+    params = {
+      accion:'nueva', area:area, origen:origenPunto.nombre, tipo:sel.tipo, servicio:sel.servicio,
+      peso: document.getElementById('peso').value || '',
+      cantidad: document.getElementById('cantidad').value || '',
+      destino:destinoPunto.nombre, distrito:destinoPunto.distrito, zona:destinoPunto.zona,
+      prioridad:sel.prioridad,
+      fechanecesidad: document.getElementById('fechaNecesidad').value || '',
+      comentarios: document.getElementById('comentarios').value.trim(),
+      callback:'respuestaGuardar'
+    };
+  } else {
+    var d = directorio[parseInt(destinoIdx,10)];
+    params = {
+      accion:'nueva', area:area, origen:sel.origen, tipo:sel.tipo, servicio:sel.servicio,
+      peso: document.getElementById('peso').value || '',
+      cantidad: document.getElementById('cantidad').value || '',
+      destino:d.nombre, distrito:d.distrito, zona:d.zona,
+      prioridad:sel.prioridad,
+      fechanecesidad: document.getElementById('fechaNecesidad').value || '',
+      comentarios: document.getElementById('comentarios').value.trim(),
+      callback:'respuestaGuardar'
+    };
+  }
   var qs = Object.keys(params).map(function(k){
     return encodeURIComponent(k)+'='+encodeURIComponent(params[k]);
   }).join('&');
@@ -366,6 +453,10 @@ document.getElementById('btnOtra').addEventListener('click', function(){
   document.getElementById('comentarios').value='';
   selDestino().value='';
   document.getElementById('infoDestino').classList.remove('visible');
+  document.getElementById('trasladoOrigen').value='';
+  document.getElementById('trasladoDestino').value='';
+  document.getElementById('infoTrasladoOrigen').classList.remove('visible');
+  document.getElementById('infoTrasladoDestino').classList.remove('visible');
   document.getElementById('chipsTipo').querySelectorAll('.chip').forEach(function(c){c.classList.remove('activo');});
   sel.tipo='';
   document.getElementById('campoPeso').classList.remove('visible');
@@ -462,7 +553,7 @@ function procesarConsulta(json){
     var extra='';
     if(o.estado==='PROGRAMADO' && o.chofer) extra='Chofer: '+o.chofer+(o.fechaprog?' · '+o.fechaprog:'');
     if(o.estado==='NO ENTREGADO' && o.motivo) extra='Motivo: '+o.motivo;
-    var serv = o.servicio==='RECOJO' ? '📥 Recojo' : '📤 Envío';
+    var serv = o.servicio==='RECOJO' ? '📥 Recojo' : o.servicio==='TRASLADO' ? '🔄 Traslado' : '📤 Envío';
     html += '<div class="item-consulta">'
       + '<div class="linea1"><span class="id">'+o.id+' · '+serv+'</span>'+badge(o.estado)+'</div>'
       + '<div class="dest">'+o.destino+' <span style="color:#9CA3AF">('+o.distrito+')</span></div>'
