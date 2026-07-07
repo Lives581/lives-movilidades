@@ -50,9 +50,11 @@
   .b-prog{background:#DBEAFE; color:#1E40AF;}
   .b-entr{background:#D1FAE5; color:#065F46;}
   .b-noentr{background:#FEE2E2; color:#991B1B;}
+  .b-cancel{background:#374151; color:#fff;}
   .b-lock{background:#E5E7EB; color:#374151;}
   .b-envio{background:#0E3B36; color:#fff;}
   .b-recojo{background:#F59E0B; color:#fff;}
+  .b-traslado{background:#6D28D9; color:#fff;}
   .b-espera{background:#FEF3C7; color:#92400E;}
   .btn-ubic{display:inline-block; padding:3px 9px; background:#EFF6FF; color:#1E40AF; border:1px solid #BFDBFE; border-radius:6px; font-size:12px; font-weight:600; text-decoration:none;}
   .btn-ubic:hover{background:#DBEAFE;}
@@ -61,6 +63,7 @@
   .btn-fila-accion{padding:4px 8px; border:1px solid var(--borde); border-radius:6px; background:#fff; font-size:12px; cursor:pointer; margin-right:3px;}
   .btn-fila-accion:hover{background:var(--gris-claro);}
   .btn-fila-accion.revertir{color:var(--alerta); border-color:#FCA5A5;}
+  .btn-fila-accion.cancelar{color:#374151; border-color:#9CA3AF; background:#F3F4F6;}
   .btn-excel{padding:8px 14px; background:#fff; color:#065F46; border:1.5px solid var(--esmeralda); border-radius:7px; font-size:13px; font-weight:600; cursor:pointer;}
 
   .modal-overlay{position:fixed; inset:0; background:rgba(14,59,54,.45); display:none; align-items:center; justify-content:center; z-index:200;}
@@ -122,12 +125,18 @@
       <option value="PENDIENTE">Pendientes</option>
       <option value="PROGRAMADO">Programados</option>
       <option value="EN_ESPERA">En espera</option>
+      <option value="CANCELADO">Canceladas</option>
       <option value="TODOS">Todos</option>
     </select>
   </div>
   <div class="grupo-filtro">
     <label>Chofer:</label>
     <select id="filtroChofer"><option value="">Todos</option></select>
+  </div>
+  <div class="grupo-filtro">
+    <label>Necesitan para:</label>
+    <input type="date" id="filtroFechaNecesaria">
+    <span class="btn-zona" id="btnLimpiarFechaNecesaria" title="Quitar filtro de fecha">✕</span>
   </div>
   <div class="grupo-filtro">
     <label>Buscar:</label>
@@ -225,7 +234,7 @@ var solicitudes = [];       // todas las filas
 var choferes = [];          // activos
 var puntosBloqueados = {};  // DESTINO(mayus) -> true si tiene PROGRAMADO sin cerrar
 var seleccion = {};         // id -> true
-var filtro = { zona:'', urg:false, estado:'PENDIENTE', buscar:'', chofer:'' };
+var filtro = { zona:'', urg:false, estado:'PENDIENTE', buscar:'', chofer:'', fechanecesaria:'' };
 
 // ---------- Cargar CHOFERES (Apps Script: inmune a filtros visuales del Sheet) ----------
 function cargarChoferes(){
@@ -295,7 +304,9 @@ function procesarSolicitudes(json){
         servicio:  String(row[20]||'ENVIO').trim().toUpperCase(),
         hllegada:  String(row[21]||'').trim(),
         ubicacionllegada: String(row[22]||'').trim(),
-        fechanecesidad: String(row[23]||'').trim()
+        fechanecesidad: String(row[23]||'').trim(),
+        hcancelacion: String(row[24]||'').trim(),
+        motivocancelacion: String(row[25]||'').trim()
       };
       if (!o.id) return;
       if (o.id.toUpperCase() === 'ID') return; // descartar fila de encabezado
@@ -324,6 +335,12 @@ function pasaFiltros(o){
   if (filtro.zona && o.zona !== filtro.zona) return false;
   if (filtro.urg && o.prioridad !== 'SI') return false;
   if (filtro.chofer && o.chofer !== filtro.chofer) return false;
+  if (filtro.fechanecesaria){
+    var f = parseFechaFlexible(o.fechanecesidad);
+    if (!f) return false;
+    var d = new Date(filtro.fechanecesaria+'T00:00:00');
+    if (f.getFullYear()!==d.getFullYear() || f.getMonth()!==d.getMonth() || f.getDate()!==d.getDate()) return false;
+  }
   if (filtro.buscar){
     var t = (o.id+' '+o.destino+' '+o.area+' '+o.distrito).toLowerCase();
     if (t.indexOf(filtro.buscar.toLowerCase()) < 0) return false;
@@ -354,6 +371,7 @@ function badgeEstado(e){
   if (e==='EN_ESPERA') return '<span class="badge b-espera">⏳ EN ESPERA</span>';
   if (e==='ENTREGADO') return '<span class="badge b-entr">ENTREGADO</span>';
   if (e==='NO ENTREGADO') return '<span class="badge b-noentr">NO ENTREGADO</span>';
+  if (e==='CANCELADO') return '<span class="badge b-cancel">❌ CANCELADO</span>';
   return '<span class="badge b-pend">'+e+'</span>';
 }
 
@@ -375,9 +393,13 @@ function render(){
     var cantPeso = o.tipo==='CARGA' ? (o.peso? o.peso+' kg':'—') : (o.cantidad? o.cantidad+' und':'—');
     var badgeServ = o.servicio==='RECOJO'
         ? '<span class="badge b-recojo">RECOJO</span>'
+        : o.servicio==='TRASLADO'
+        ? '<span class="badge b-traslado">TRASLADO</span>'
         : '<span class="badge b-envio">ENVÍO</span>';
     var flechaBase = o.servicio==='RECOJO'
         ? '<span style="font-size:11px;color:#9CA3AF">→ '+o.origen+'</span>'
+        : o.servicio==='TRASLADO'
+        ? '<span style="font-size:11px;color:#9CA3AF">(punto externo)</span>'
         : '<span style="font-size:11px;color:#9CA3AF">'+o.origen+' →</span>';
     var ubicHtml = '';
     if (o.ubicacionllegada) ubicHtml += '<a href="'+o.ubicacionllegada+'" target="_blank" class="btn-ubic llegada" title="Ubicación de llegada">📍L</a> ';
@@ -385,10 +407,16 @@ function render(){
     if (o.foto) ubicHtml += '<a href="'+o.foto+'" target="_blank" class="btn-foto-link" title="Ver foto">📷</a>';
     if (!ubicHtml) ubicHtml = '<span style="color:#D1D5DB">—</span>';
     var editable = (o.estado==='PROGRAMADO' || o.estado==='EN_ESPERA');
-    var accionesFila = editable
-        ? ('<button class="btn-fila-accion" onclick="abrirEditar(\''+o.id+'\')" title="Cambiar chofer o fecha">✏️ Editar</button>'
-          + '<button class="btn-fila-accion revertir" onclick="revertirSolicitud(\''+o.id+'\')" title="Deshacer y volver a pendiente">↩️ Revertir</button>')
-        : '<span style="color:#D1D5DB">—</span>';
+    var cancelable = (o.estado==='PENDIENTE' || o.estado==='PROGRAMADO' || o.estado==='EN_ESPERA');
+    var accionesFila = '';
+    if (editable) {
+      accionesFila += '<button class="btn-fila-accion" onclick="abrirEditar(\''+o.id+'\')" title="Cambiar chofer o fecha">✏️ Editar</button>'
+        + '<button class="btn-fila-accion revertir" onclick="revertirSolicitud(\''+o.id+'\')" title="Deshacer y volver a pendiente">↩️ Revertir</button>';
+    }
+    if (cancelable) {
+      accionesFila += '<button class="btn-fila-accion cancelar" onclick="cancelarSolicitud(\''+o.id+'\')" title="La solicitud ya no se necesita">❌ Cancelar</button>';
+    }
+    if (!accionesFila) accionesFila = '<span style="color:#D1D5DB">—</span>';
     html += '<tr class="'+clases.join(' ')+'" data-id="'+o.id+'" data-zona="'+o.zona+'">'
       + '<td>'+(checkable
           ? '<input type="checkbox" class="chk chk-fila" data-id="'+o.id+'" '+(seleccion[o.id]?'checked':'')+'>'
@@ -406,7 +434,7 @@ function render(){
       + '<td class="destino-col">'+o.destino+(enCurso?' <span class="badge b-lock" title="Este punto ya tiene otro despacho en curso — puedes asignar igual, solo verifica con el equipo">⚠️ ya en curso</span>':'')+'</td>'
       + '<td>'+o.distrito+'</td>'
       + '<td><span class="badge b-zona">'+o.zona+'</span></td>'
-      + '<td>'+badgeEstado(o.estado)+(o.motivo?'<br><span style="font-size:11px;color:#991B1B">'+o.motivo+'</span>':'')+'</td>'
+      + '<td>'+badgeEstado(o.estado)+(o.motivo?'<br><span style="font-size:11px;color:#991B1B">'+o.motivo+'</span>':'')+(o.estado==='CANCELADO'?'<br><span style="font-size:11px;color:#6B7280">'+o.hcancelacion+(o.motivocancelacion?' · '+o.motivocancelacion:'')+'</span>':'')+'</td>'
       + '<td>'+(o.chofer||'—')+'</td>'
       + '<td class="fh">'+(o.hprog||'—')+'</td>'
       + '<td class="fh">'+(o.hllegada||'—')+'</td>'
@@ -557,6 +585,23 @@ window.respRevertir = function(r){
   else { mostrarToast((r&&r.msg)?r.msg:'Error al revertir','error'); }
 };
 
+// ---------- Cancelar (la solicitud ya no se necesita) ----------
+function cancelarSolicitud(id){
+  var motivo = prompt('Vas a cancelar '+id+'. Puedes escribir el motivo (opcional):', '');
+  if (motivo === null) return; // el usuario le dio Cancelar en el prompt
+  if (!confirm('¿Confirmas cancelar '+id+'? Esta acción no se puede deshacer.')) return;
+  var params = { accion:'cancelar', id:id, motivo:motivo||'', callback:'respCancelar' };
+  var qs = Object.keys(params).map(function(k){return encodeURIComponent(k)+'='+encodeURIComponent(params[k]);}).join('&');
+  var s = document.createElement('script');
+  s.src = URL_APPS_SCRIPT + '?' + qs;
+  s.onerror = function(){ mostrarToast('Error de conexión','error'); };
+  document.body.appendChild(s);
+}
+window.respCancelar = function(r){
+  if (r && r.ok){ mostrarToast(r.msg||'Solicitud cancelada','exito'); setTimeout(cargarSolicitudes, 500); }
+  else { mostrarToast((r&&r.msg)?r.msg:'Error al cancelar','error'); }
+};
+
 // ---------- Exportar a Excel (lo que está filtrado en pantalla) ----------
 document.getElementById('btnExcel').addEventListener('click', function(){
   var lista = ordenar(solicitudes.filter(pasaFiltros));
@@ -570,7 +615,9 @@ document.getElementById('btnExcel').addEventListener('click', function(){
       'Punto': o.destino, 'Distrito': o.distrito, 'Zona': o.zona,
       'Estado': o.estado, 'Chofer': o.chofer, 'Fecha Programada': o.fechaprog,
       'Hora Programación': o.hprog, 'Hora Llegada': o.hllegada, 'Hora Entrega': o.hentrega,
-      'Fecha Necesaria': o.fechanecesidad, 'Motivo No Entrega': o.motivo, 'Comentarios': o.comentarios
+      'Fecha Necesaria': o.fechanecesidad, 'Motivo No Entrega': o.motivo,
+      'Fecha/Hora Cancelación': o.hcancelacion, 'Motivo Cancelación': o.motivocancelacion,
+      'Comentarios': o.comentarios
     };
   });
   var ws = XLSX.utils.json_to_sheet(filas);
@@ -595,6 +642,12 @@ document.getElementById('toggleUrg').addEventListener('click', function(){
 });
 document.getElementById('filtroEstado').addEventListener('change', function(){ filtro.estado=this.value; render(); });
 document.getElementById('filtroChofer').addEventListener('change', function(){ filtro.chofer=this.value; render(); });
+document.getElementById('filtroFechaNecesaria').addEventListener('change', function(){ filtro.fechanecesaria=this.value; render(); });
+document.getElementById('btnLimpiarFechaNecesaria').addEventListener('click', function(){
+  document.getElementById('filtroFechaNecesaria').value = '';
+  filtro.fechanecesaria = '';
+  render();
+});
 document.getElementById('buscar').addEventListener('input', function(){ filtro.buscar=this.value; render(); });
 document.getElementById('btnRefresh').addEventListener('click', cargarSolicitudes);
 document.getElementById('btnLimpiar').addEventListener('click', function(){
