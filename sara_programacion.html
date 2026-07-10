@@ -239,7 +239,7 @@ var filtro = { zona:'', urg:false, estado:'PENDIENTE', buscar:'', chofer:'', fec
 // ---------- Cargar CHOFERES (Apps Script: inmune a filtros visuales del Sheet) ----------
 function cargarChoferes(){
   var s = document.createElement('script');
-  s.src = URL_APPS_SCRIPT + '?accion=listarchoferes&callback=procesarChoferes';
+  s.src = URL_APPS_SCRIPT + '?accion=listarchoferes&callback=procesarChoferes&_=' + Date.now();
   document.body.appendChild(s);
 }
 function procesarChoferes(json){
@@ -269,7 +269,7 @@ window.procesarChoferes = procesarChoferes;
 function cargarSolicitudes(){
   document.getElementById('cuerpo').innerHTML = '<tr><td colspan="19" class="cargando">Cargando solicitudes...</td></tr>';
   var s = document.createElement('script');
-  s.src = URL_APPS_SCRIPT + '?accion=listarsolicitudes&callback=procesarSolicitudes';
+  s.src = URL_APPS_SCRIPT + '?accion=listarsolicitudes&callback=procesarSolicitudes&_=' + Date.now();
   s.onerror = function(){ document.getElementById('cuerpo').innerHTML='<tr><td colspan="19" class="vacio">Error al cargar. Revisa tu conexión.</td></tr>'; };
   document.body.appendChild(s);
 }
