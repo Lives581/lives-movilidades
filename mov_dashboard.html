@@ -213,7 +213,7 @@ function cargarSolicitudes(){
   document.getElementById('cargandoMsg').style.display='block';
   document.getElementById('cuerpoDashboard').style.display='none';
   var s = document.createElement('script');
-  s.src = URL_APPS_SCRIPT + '?accion=listarsolicitudes&callback=procesarDatos';
+  s.src = URL_APPS_SCRIPT + '?accion=listarsolicitudes&callback=procesarDatos&_=' + Date.now();
   s.onerror = function(){ document.getElementById('cargandoMsg').textContent='Error al cargar. Revisa tu conexión.'; };
   document.body.appendChild(s);
 }
